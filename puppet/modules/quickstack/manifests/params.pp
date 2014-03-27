@@ -24,6 +24,7 @@ class quickstack::params {
   $neutron_user_password      = 'CHANGEME'
   $nova_db_password           = 'CHANGEME'
   $nova_user_password         = 'CHANGEME'
+  $security_group_api         = 'nova'
 
   # Cinder
   $cinder_db_password           = 'CHANGEME'
@@ -82,6 +83,15 @@ class quickstack::params {
   $cisco_vswitch_plugin          = 'neutron.plugins.openvswitch.ovs_neutron_plugin.OVSNeutronPluginV2'
   # If using the Cisco plugin, Nexus hardware can be used for l2
   $cisco_nexus_plugin            = 'neutron.plugins.cisco.nexus.cisco_nexus_plugin_v2.NexusPlugin'
+  # If using PLUMgrid plugin, please provide the following configurations
+  $plumgrid_plugin               = 'neutron.plugins.plumgrid.plumgrid_plugin.plumgrid_plugin.NeutronPluginPLUMgridV2'
+  $pg_connection                 = 'db_connection'
+  $pg_director_server            = 'PLUMgrid_Virtual_IP'
+  $pg_director_server_port       = 'PLUMgrid_Director_Port'
+  $pg_username                   = 'PLUMgrid_Director_Admin'
+  $pg_password                   = 'PLUMgrid_Director_Admin_Password'
+  $pg_servertimeout              = '70'
+  # End PLUMgrid config
 
   # If using the nexus sub plugin, specify the hardware layout by
   # using the following syntax:
