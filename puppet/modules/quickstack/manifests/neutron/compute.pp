@@ -124,6 +124,8 @@ class quickstack::neutron::compute (
     vxlan_udp_port   => $ovs_vxlan_udp_port,
   }
 
+  }
+
   class { '::nova::network::neutron':
     neutron_admin_password    => $neutron_user_password,
     neutron_url               => "http://${controller_priv_host}:9696",
