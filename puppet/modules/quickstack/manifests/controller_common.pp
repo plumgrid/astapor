@@ -298,6 +298,7 @@ class quickstack::controller_common (
     horizon_cert  => $horizon_cert,
     horizon_key   => $horizon_key,
     horizon_ca    => $horizon_ca,
+    keystone_default_role => "_member_",
   }
   # patch our horizon/apache config to avoid duplicate port 80
   # directive.  TODO: remove this once puppet-horizon/apache can
