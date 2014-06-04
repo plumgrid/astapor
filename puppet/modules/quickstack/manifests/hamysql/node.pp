@@ -10,29 +10,35 @@ class quickstack::hamysql::node (
 
   # these two variables are distinct because you may want to bind on
   # '0.0.0.0' rather than just the floating ip
-  $mysql_bind_address          = $quickstack::params::mysql_host,
-  $mysql_virtual_ip            = $quickstack::params::mysql_host,
-  $mysql_virt_ip_nic           = $quickstack::params::mysql_virt_ip_nic,
-  $mysql_virt_ip_cidr_mask     = $quickstack::params::mysql_virt_ip_cidr_mask,
+  $mysql_bind_address           = $quickstack::params::mysql_host,
+  $mysql_virtual_ip             = $quickstack::params::mysql_host,
+  $mysql_virtual_ip_managed     = "true",
+  $mysql_virt_ip_nic            = $quickstack::params::mysql_virt_ip_nic,
+  $mysql_virt_ip_cidr_mask      = $quickstack::params::mysql_virt_ip_cidr_mask,
   # e.g. "192.168.200.200:/mnt/mysql"
   $mysql_shared_storage_device = $quickstack::params::mysql_shared_storage_device,
   # e.g. "nfs"
-  $mysql_shared_storage_type   = $quickstack::params::mysql_shared_storage_type,
-  $mysql_resource_group_name   = $quickstack::params::mysql_resource_group_name,
-  $mysql_clu_member_addrs      = $quickstack::params::mysql_clu_member_addrs,
-
+  $mysql_shared_storage_type    = $quickstack::params::mysql_shared_storage_type,
+  #
+  $mysql_shared_storage_options = $quickstack::params::mysql_shared_storage_options,
+  $mysql_resource_group_name    = $quickstack::params::mysql_resource_group_name,
+  $mysql_clu_member_addrs       = $quickstack::params::mysql_clu_member_addrs,
+  $corosync_setup               = true,
+  $cluster_control_ip           = '',
 ) inherits quickstack::params {
+
+    include mysql::python
+
+    $mysql_virtual_ip_managed_bool = str2bool_i("$mysql_virtual_ip_managed")
+    $pcs_resource_setup = has_interface_with("ipaddress", $cluster_control_ip)
 
     package { 'mysql-server':
       ensure => installed,
     }
     ->
-    package { 'MySQL-python':
-      ensure => installed,
-    }
-    ->
     class {'quickstack::hamysql::mysql::config':
       bind_address =>  $mysql_bind_address,
+      socket => '/var/run/mysqld/mysql.sock',
     }
     ->
     # TODO: use quickstack::pacemaker::common instead

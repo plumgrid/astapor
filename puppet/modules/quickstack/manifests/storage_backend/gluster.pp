@@ -51,7 +51,8 @@ class quickstack::storage_backend::gluster(
   # 1 port per brick
   firewall { '002 gluster bricks incoming':
     proto  => 'tcp',
-    dport  => port_range(49152, $gluster_open_port_count),
+    #dport  => port_range('49152', '6'),
+    dport    => [ '49152', '49153', '49154', '49155', '49156', '49157' ],
     action => 'accept',
   }
 }

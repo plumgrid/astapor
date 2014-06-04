@@ -1,21 +1,29 @@
-class quickstack::pacemaker::load_balancer (
-  $ha_loadbalancer_public_vip  = $quickstack::params::ha_loadbalancer_public_vip,
-  $ha_loadbalancer_private_vip = $quickstack::params::ha_loadbalancer_private_vip,
-  $ha_loadbalancer_group       = $quickstack::params::ha_loadbalancer_group,
-) inherits quickstack::params {
+class quickstack::pacemaker::load_balancer {
 
-  pacemaker::resource::ip { "ip-$ha_loadbalancer_public_vip":
-    ip_address => "$ha_loadbalancer_public_vip",
-    group      => "$ha_loadbalancer_group",
-  }
-  ->
-  pacemaker::resource::ip { "ip-$ha_loadbalancer_private_vip":
-    ip_address => "$ha_loadbalancer_private_vip",
-    group      => "$ha_loadbalancer_group",
-  }
-  ->
-  pacemaker::resource::lsb {'haproxy':
-    group => "$ha_loadbalancer_group",
+  include quickstack::pacemaker::common
+
+  $loadbalancer_group = map_params("loadbalancer_group")
+  $loadbalancer_vip   = map_params("loadbalancer_vip")
+
+  quickstack::pacemaker::vips { "$loadbalancer_group":
+    public_vip  => $loadbalancer_vip,
+    private_vip => $loadbalancer_vip,
+    admin_vip   => $loadbalancer_vip,
+  } ->
+
+  Service['haproxy'] ->
+  exec {"pcs-haproxy-server-set-up-on-this-node":
+    command => "/tmp/ha-all-in-one-util.bash update_my_node_property haproxy"
+  } ->
+  exec {"all-haproxy-nodes-are-up":
+    timeout   => 3600,
+    tries     => 360,
+    try_sleep => 10,
+    command   => "/tmp/ha-all-in-one-util.bash all_members_include haproxy",
+
+  } ->
+  quickstack::pacemaker::resource::lsb {'haproxy':
+    group => "$loadbalancer_group",
     clone => true,
   }
 

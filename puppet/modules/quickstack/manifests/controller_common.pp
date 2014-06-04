@@ -19,6 +19,7 @@ class quickstack::controller_common (
   $heat_cloudwatch               = $quickstack::params::heat_cloudwatch,
   $heat_db_password              = $quickstack::params::heat_db_password,
   $heat_user_password            = $quickstack::params::heat_user_password,
+  $heat_auth_encrypt_key,
   $horizon_secret_key            = $quickstack::params::horizon_secret_key,
   $keystone_admin_token          = $quickstack::params::keystone_admin_token,
   $keystone_db_password          = $quickstack::params::keystone_db_password,
@@ -39,6 +40,8 @@ class quickstack::controller_common (
   $swift_storage_ips             = ["192.168.203.2","192.168.203.3","192.168.203.4"],
   $swift_storage_device          = 'device1',
   $qpid_host                     = $quickstack::params::qpid_host,
+  $qpid_username                 = $quickstack::params::qpid_username,
+  $qpid_password                 = $quickstack::params::qpid_password,
   $verbose                       = $quickstack::params::verbose,
   $ssl                           = $quickstack::params::ssl,
   $freeipa                       = $quickstack::params::freeipa,
@@ -53,6 +56,8 @@ class quickstack::controller_common (
   $horizon_key                   = $quickstack::params::horizon_key,
   $qpid_nssdb_password           = $quickstack::params::qpid_nssdb_password,
 ) inherits quickstack::params {
+
+  class {'quickstack::openstack_common': }
 
   if str2bool_i("$ssl") {
     $qpid_protocol = 'ssl'
@@ -95,7 +100,7 @@ class quickstack::controller_common (
       $nova_sql_connection = "mysql://nova:${nova_db_password}@${mysql_host}/nova"
   }
 
-  class {'openstack::db::mysql':
+  class {'quickstack::db::mysql':
     mysql_root_password  => $mysql_root_password,
     keystone_db_password => $keystone_db_password,
     glance_db_password   => $glance_db_password,
@@ -125,7 +130,25 @@ class quickstack::controller_common (
     ssl_ca   => $qpid_ca,
     ssl_cert => $qpid_cert,
     ssl_key  => $qpid_key,
-    ssl_database_password => $qpid_nssdb_password
+    ssl_database_password => $qpid_nssdb_password,
+    config_file => $::operatingsystem ? {
+        'Fedora' => '/etc/qpid/qpidd.conf',
+        default  => '/etc/qpidd.conf',
+        },
+    auth      => 'no',
+    clustered => false,
+  }
+
+  # quoth the puppet language reference,
+  # "Empty strings are false; all other strings are true."
+  if $qpid_username {
+    qpid_user { $qpid_username:
+      password  => $qpid_password,
+      file      => '/var/lib/qpidd/qpidd.sasldb',
+      realm     => 'QPID',
+      provider  => 'saslpasswd2',
+      require   => Class['qpid::server'],
+    }
   }
 
   class {'openstack::keystone':
@@ -163,7 +186,7 @@ class quickstack::controller_common (
 
     neutron                 => str2bool_i("$neutron"),
     enabled                 => true,
-    require                 => Class['openstack::db::mysql'],
+    require                 => Class['quickstack::db::mysql'],
   }
 
   class { 'swift::keystone::auth':
@@ -179,20 +202,30 @@ class quickstack::controller_common (
     db_ssl_ca      => $mysql_ca,
     user_password  => $glance_user_password,
     db_password    => $glance_db_password,
-    require        => Class['openstack::db::mysql'],
+    require        => Class['quickstack::db::mysql'],
+  }
+  class { 'glance::notify::qpid':
+    qpid_password => $qpid_password,
+    qpid_username => $qpid_username,
+    qpid_hostname => $qpid_host,
+    qpid_port     => $qpid_port,
+    qpid_protocol => 'tcp',
   }
 
+
   # Configure Nova
-  class { 'nova':
+  class { '::nova':
     sql_connection     => $nova_sql_connection,
     image_service      => 'nova.image.glance.GlanceImageService',
     glance_api_servers => "http://${controller_priv_host}:9292/v1",
     rpc_backend        => 'nova.openstack.common.rpc.impl_qpid',
+    qpid_hostname      => $qpid_host,
+    qpid_username      => $qpid_username,
+    qpid_password      => $qpid_password,
     verbose            => $verbose,
     qpid_protocol      => $qpid_protocol,
     qpid_port          => $qpid_port,
-    qpid_hostname      => $qpid_host,
-    require            => Class['openstack::db::mysql', 'qpid::server'],
+    require            => Class['quickstack::db::mysql', 'qpid::server'],
   }
 
   nova_config {
@@ -200,25 +233,25 @@ class quickstack::controller_common (
   }
 
   if str2bool_i("$neutron") {
-    class { 'nova::api':
+    class { '::nova::api':
       enabled           => true,
       admin_password    => $nova_user_password,
       auth_host         => $controller_priv_host,
       neutron_metadata_proxy_shared_secret => $neutron_metadata_proxy_secret,
     }
   } else {
-    class { 'nova::api':
+    class { '::nova::api':
       enabled           => true,
       admin_password    => $nova_user_password,
       auth_host         => $controller_priv_host,
     }
   }
 
-  class { [ 'nova::scheduler', 'nova::cert', 'nova::consoleauth', 'nova::conductor' ]:
+  class { [ '::nova::scheduler', '::nova::cert', '::nova::consoleauth', '::nova::conductor' ]:
     enabled => true,
   }
 
-  class { 'nova::vncproxy':
+  class { '::nova::vncproxy':
     host    => '0.0.0.0',
     enabled => true,
   }
@@ -232,11 +265,14 @@ class quickstack::controller_common (
     qpid_host                   => $qpid_host,
     qpid_protocol               => $qpid_protocol,
     qpid_port                   => $qpid_port,
+    qpid_username               => $qpid_username,
+    qpid_password               => $qpid_password,
     verbose                     => $verbose,
   }
 
   class {'quickstack::swift::proxy':
-    controller_pub_host        => $controller_pub_host,
+    swift_proxy_host           => $controller_pub_host,
+    keystone_host              => $controller_pub_host,
     swift_admin_password       => $swift_admin_password,
     swift_shared_secret        => $swift_shared_secret,
     swift_storage_ips          => $swift_storage_ips,
@@ -259,10 +295,13 @@ class quickstack::controller_common (
     qpid_host                   => $qpid_host,
     qpid_port                   => $qpid_port,
     qpid_protocol               => $qpid_protocol,
+    qpid_username               => $qpid_username,
+    qpid_password               => $qpid_password,
     verbose                     => $verbose,
   }
 
   class { 'quickstack::heat_controller':
+    auth_encryption_key         => $heat_auth_encrypt_key,
     heat_cfn                    => $heat_cfn,
     heat_cloudwatch             => $heat_cloudwatch,
     heat_user_password          => $heat_user_password,
@@ -276,6 +315,8 @@ class quickstack::controller_common (
     qpid_host                   => $qpid_host,
     qpid_port                   => $qpid_port,
     qpid_protocol               => $qpid_protocol,
+    qpid_username               => $qpid_username,
+    qpid_password               => $qpid_password,
     verbose                     => $verbose,
   }
 
@@ -285,7 +326,7 @@ class quickstack::controller_common (
   }~>
   package {'python-netaddr':
     ensure => installed,
-    notify => Class['horizon'],
+    notify => Class['::horizon'],
   }
 
   file {'/etc/httpd/conf.d/rootredirect.conf':
@@ -294,15 +335,15 @@ class quickstack::controller_common (
     notify  => File['/etc/httpd/conf.d/openstack-dashboard.conf'],
   }
 
-  class {'horizon':
-    secret_key    => $horizon_secret_key,
-    keystone_host => $controller_priv_host,
-    fqdn          => ["$controller_pub_host", "$::fqdn", "$::hostname", 'localhost'],
-    listen_ssl    => str2bool_i("$ssl"),
-    horizon_cert  => $horizon_cert,
-    horizon_key   => $horizon_key,
-    horizon_ca    => $horizon_ca,
-    keystone_default_role => "_member_",
+  class {'::horizon':
+    secret_key            => $horizon_secret_key,
+    keystone_default_role => '_member_',
+    keystone_host         => $controller_priv_host,
+    fqdn                  => ["$controller_pub_host", "$::fqdn", "$::hostname", 'localhost'],
+    listen_ssl            => str2bool_i("$ssl"),
+    horizon_cert          => $horizon_cert,
+    horizon_key           => $horizon_key,
+    horizon_ca            => $horizon_ca,
   }
   # patch our horizon/apache config to avoid duplicate port 80
   # directive.  TODO: remove this once puppet-horizon/apache can
@@ -324,6 +365,12 @@ class quickstack::controller_common (
     action   => 'accept',
   }
 
+  firewall { '001 controller incoming pt2':
+    proto    => 'tcp',
+    dport    => ['8000', '8003', '8004'],
+    action   => 'accept',
+  }
+
   if $ssl {
     firewall { '002 ssl controller incoming':
       proto    => 'tcp',
@@ -339,10 +386,18 @@ class quickstack::controller_common (
     }
   }
 
+  # This exists to cover havana release, where we only exposed the pub and priv
+  # hosts, admin was not a param there.
+  if $controller_admin_host == undef or $controller_admin_host == '' {
+    $real_admin_host = $controller_priv_host
+  } else {
+    $real_admin_host = $controller_admin_host
+  }
+
   if str2bool_i("$keystonerc") {
     class { 'quickstack::admin_client':
       admin_password        => $admin_password,
-      controller_admin_host => $controller_admin_host,
+      controller_admin_host => $real_admin_host,
     }
   }
 

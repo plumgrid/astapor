@@ -12,8 +12,16 @@ class quickstack::cinder_controller(
   $qpid_host                   = $quickstack::params::qpid_host,
   $qpid_port                   = "5672",
   $qpid_protocol               = "tcp",
+  $qpid_username               = $quickstack::params::qpid_username,
+  $qpid_password               = $quickstack::params::qpid_password,
   $verbose                     = $quickstack::params::verbose,
 ) inherits quickstack::params {
+
+  $qpid_password_safe_for_cinder = $qpid_password ? {
+    ''      => 'guest',
+    false   => 'guest',
+    default => $qpid_password,
+  }
 
   cinder_config {
     'DEFAULT/glance_host': value => $controller_priv_host;
@@ -26,48 +34,49 @@ class quickstack::cinder_controller(
     $sql_connection = "mysql://cinder:${cinder_db_password}@${mysql_host}/cinder"
   }
 
-  class {'cinder':
+  class {'::cinder':
     rpc_backend    => 'cinder.openstack.common.rpc.impl_qpid',
     qpid_hostname  => $qpid_host,
     qpid_protocol  => $qpid_protocol,
     qpid_port      => $qpid_port,
-    qpid_password  => 'guest',
+    qpid_username  => $qpid_username,
+    qpid_password  => $qpid_password_safe_for_cinder,
     sql_connection => $sql_connection,
     verbose        => $verbose,
-    require        => Class['openstack::db::mysql', 'qpid::server'],
+    require        => Class['quickstack::db::mysql', 'qpid::server'],
   }
 
-  class {'cinder::api':
+  class {'::cinder::api':
     keystone_password => $cinder_user_password,
     keystone_tenant => "services",
     keystone_user => "cinder",
     keystone_auth_host => $controller_priv_host,
   }
 
-  class {'cinder::scheduler': }
+  class {'::cinder::scheduler': }
 
   if str2bool_i("$cinder_backend_gluster") {
-    class { 'cinder::volume': }
+    class { '::cinder::volume': }
 
     class { 'gluster::client': }
 
     if ($::selinux != "false") {
       selboolean{'virt_use_fusefs':
-          value => on,
-          persistent => true,
+        value => on,
+        persistent => true,
       }
     }
 
-    class { 'cinder::volume::glusterfs':
+    class { '::cinder::volume::glusterfs':
       glusterfs_mount_point_base => '/var/lib/cinder/volumes',
       glusterfs_shares           => suffix($cinder_gluster_servers, ":/${cinder_gluster_volume}")
     }
   }
 
   if !str2bool_i("$cinder_backend_gluster") and !str2bool_i("$cinder_backend_iscsi") {
-    class { 'cinder::volume': }
+    class { '::cinder::volume': }
 
-    class { 'cinder::volume::iscsi':
+    class { '::cinder::volume::iscsi':
       iscsi_ip_address => $controller_priv_host,
     }
 

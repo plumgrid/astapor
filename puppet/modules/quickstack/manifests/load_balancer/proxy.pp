@@ -5,8 +5,11 @@ define quickstack::load_balancer::proxy (
   $listen_options,
   $member_options,
   $define_cookies = false,
+  $backend_server_names,
+  $backend_server_addrs,
+  $maxconn = 10000,
+  $backend_port = '',
 ) {
-  include quickstack::load_balancer
 
   haproxy::listen { $name:
     ipaddress        => $addr,
@@ -16,11 +19,16 @@ define quickstack::load_balancer::proxy (
     collect_exported => false,
   }
 
+  $balancermember_port = $backend_port ? {
+    '' => $port,
+    default => $backend_port,
+  }
+
   haproxy::balancermember { $name:
     listening_service => $name,
-    ports             => $port,
-    server_names      => $::quickstack::load_balancer::backend_server_names,
-    ipaddresses       => $::quickstack::load_balancer::backend_server_addrs,
+    ports             => $balancermember_port,
+    server_names      => $backend_server_names,
+    ipaddresses       => $backend_server_addrs,
     options           => $member_options,
     define_cookies    => $define_cookies,
   }
