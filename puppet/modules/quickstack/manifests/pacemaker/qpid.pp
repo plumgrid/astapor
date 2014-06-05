@@ -13,8 +13,8 @@ class quickstack::pacemaker::qpid (
   $realm                 = 'QPID',
   $log_to_file           = 'UNSET',
   $haproxy_timeout       = '120s',
+  $auth                  = 'no',
   # perhaps we will expose these to params to ::qpid:server soon
-  #$auth                  = 'no',
   #$clustered             = false,
   #$cluster_mechanism     = 'ANONYMOUS',
   #$ssl                   = false,
@@ -51,10 +51,7 @@ class quickstack::pacemaker::qpid (
       max_connections       => $max_connections,
       worker_threads        => $worker_threads,
       connection_backlog    => $connection_backlog,
-      auth => $qpid_username ? {
-        ''      => 'no',
-        default => 'yes',
-      },
+      auth                  => 'no'
       realm                 => 'QPID',
       log_to_file           => $log_to_file,
       clustered             => false,

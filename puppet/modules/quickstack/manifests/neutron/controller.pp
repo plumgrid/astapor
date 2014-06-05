@@ -23,7 +23,7 @@ class quickstack::neutron::controller (
   $controller_pub_host           = $quickstack::params::controller_pub_host,
   $glance_db_password            = $quickstack::params::glance_db_password,
   $glance_user_password          = $quickstack::params::glance_user_password,
-  $heat_auth_encrypt_key,
+  $heat_auth_encrypt_key         = $quickstack::params::heat_auth_encrypt_key,
   $heat_cfn                      = $quickstack::params::heat_cfn,
   $heat_cloudwatch               = $quickstack::params::heat_cloudwatch,
   $heat_db_password              = $quickstack::params::heat_db_password,

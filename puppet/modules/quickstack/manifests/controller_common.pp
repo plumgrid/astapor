@@ -133,10 +133,7 @@ class quickstack::controller_common (
         'Fedora' => '/etc/qpid/qpidd.conf',
         default  => '/etc/qpidd.conf',
         },
-    auth => $qpid_username ? {
-      ''      => 'no',
-      default => 'yes',
-    },
+    auth      => 'no',
     clustered => false,
   }
 

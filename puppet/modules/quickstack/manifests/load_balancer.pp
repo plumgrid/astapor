@@ -1,8 +1,10 @@
 class quickstack::load_balancer (
-  $lb_private_vip,
-  $lb_public_vip,
+  $lb_private_vip  = $quickstack::params::controller_priv_host,
+  $lb_public_vip   = $quickstack::params::controller_pub_host,
   $lb_member_names,
   $lb_member_addrs,
+  $backend_server_names,
+  $backend_server_addrs,
   $neutron         = $quickstack::params::neutron,
   $heat_cfn        = $quickstack::params::heat_cfn,
   $heat_cloudwatch = $quickstack::params::heat_cloudwatch,
