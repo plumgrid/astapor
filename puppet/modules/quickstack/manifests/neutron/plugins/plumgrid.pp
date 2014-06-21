@@ -9,6 +9,7 @@ class quickstack::neutron::plugins::plumgrid (
   $pg_username             = $quickstack::params::pg_username,
   $pg_password             = $quickstack::params::pg_password,
   $pg_servertimeout        = $quickstack::params::pg_servertimeout,
+  $pg_enable_metadata_agent = $quickstack::params::pg_enable_metadata_agent,
 
 ) inherits quickstack::params {
 
@@ -20,6 +21,7 @@ class quickstack::neutron::plugins::plumgrid (
    pg_username             => $pg_username,
    pg_password             => $pg_password,
    pg_servertimeout        => $pg_servertimeout,
+   enable_metadata_agent   => $pg_enable_metadata_agent,
   }
 
 }

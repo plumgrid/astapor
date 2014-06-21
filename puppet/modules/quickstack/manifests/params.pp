@@ -93,6 +93,7 @@ class quickstack::params {
   $pg_username                   = 'PLUMgrid_Director_Admin'
   $pg_password                   = 'PLUMgrid_Director_Admin_Password'
   $pg_servertimeout              = '70'
+  $pg_enable_metadata_agent      = false
   # End PLUMgrid config
 
   # If using the nexus sub plugin, specify the hardware layout by
