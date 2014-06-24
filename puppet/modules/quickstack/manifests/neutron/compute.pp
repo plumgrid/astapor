@@ -80,7 +80,9 @@ class quickstack::neutron::compute (
 
     nova_config { 'DEFAULT/scheduler_driver': value => 'nova.scheduler.filter_scheduler.FilterScheduler' }
     nova_config { 'DEFAULT/libvirt_vif_type': value => 'ethernet'}
-    nova_config { 'DEFAULT/libvirt_cpu_mode': value => 'none'}
+    if $use_qemu_for_poc == 'false' {
+      nova_config { 'DEFAULT/libvirt_cpu_mode': value => 'none'}
+    }
 
     # forward all ipv4 traffic
     # this is required for the vms to pass through the gateways
