@@ -54,6 +54,7 @@ class quickstack::neutron::compute (
   $private_iface                = '',
   $private_ip                   = '',
   $private_network              = '',
+  $use_qemu_for_poc             = $quickstack::params::use_qemu_for_poc,
 ) inherits quickstack::params {
 
   if str2bool_i("$ssl") {
@@ -98,6 +99,62 @@ class quickstack::neutron::compute (
     'keystone_authtoken/admin_password':    value => $neutron_user_password;
   }
 
+  if $neutron_core_plugin == 'neutron.plugins.plumgrid.plumgrid_plugin.plumgrid_plugin.NeutronPluginPLUMgridV2' {
+
+    include nova::params
+
+    class { 'nova::api':
+      admin_password    => $nova_user_password,
+      enabled           => true,
+      auth_host         => $controller_priv_host,
+      admin_tenant_name => $nova_admin_tenant_name,
+    }
+
+    nova_config { 'DEFAULT/scheduler_driver': value => 'nova.scheduler.filter_scheduler.FilterScheduler' }
+    nova_config { 'DEFAULT/libvirt_vif_type': value => 'ethernet'}
+    if $use_qemu_for_poc == 'false' {
+      nova_config { 'DEFAULT/libvirt_cpu_mode': value => 'none'}
+    }
+
+    # forward all ipv4 traffic
+    # this is required for the vms to pass through the gateways
+    # public interface
+    Exec {
+      path => $::path
+    }
+
+    sysctl::value { 'net.ipv4.ip_forward':
+      value => '1'
+    }
+
+    # network.filters should only be included in the nova-network node package
+    # Reference: https://wiki.openstack.org/wiki/Packager/Rootwrap
+    nova::generic_service { 'network.filters':
+      package_name   => $::nova::params::network_package_name,
+      service_name   => $::nova::params::network_service_name,
+    }
+
+    class { 'libvirt':
+      qemu_config => {
+              cgroup_device_acl => { value => ["/dev/null","/dev/full","/dev/zero",
+              "/dev/random","/dev/urandom","/dev/ptmx",
+              "/dev/kvm","/dev/kqemu",
+              "/dev/rtc","/dev/hpet","/dev/net/tun"] },
+               clear_emulator_capabilities => { value => 0 },
+               user => { value => "root" },
+        },
+    }
+
+    file { "/etc/sudoers.d/ifc_ctl_sudoers":
+      ensure  => file,
+      owner   => root,
+      group   => root,
+      mode    => 0440,
+      content => "nova ALL=(root) NOPASSWD: /opt/pg/bin/ifc_ctl_pp *\n",
+      require => [ Package[$::nova::params::compute_package_name], ],
+    }
+
+  } else {
   class { '::neutron::plugins::ovs':
     sql_connection      => $sql_connection,
     tenant_network_type => $tenant_network_type,
@@ -116,6 +173,8 @@ class quickstack::neutron::compute (
     enable_tunneling => str2bool_i("$enable_tunneling"),
     tunnel_types     => $ovs_tunnel_types,
     vxlan_udp_port   => $ovs_vxlan_udp_port,
+  }
+
   }
 
   class { '::nova::network::neutron':

@@ -46,6 +46,13 @@ class quickstack::neutron::controller (
   $cisco_nexus_plugin            = $quickstack::params::cisco_nexus_plugin,
   $cisco_vswitch_plugin          = $quickstack::params::cisco_vswitch_plugin,
   $controller_admin_host         = $quickstack::params::controller_admin_host,
+  $pg_connection                 = $quickstack::params::pg_connection,
+  $pg_director_server            = $quickstack::params::pg_director_server,
+  $pg_director_server_port       = $quickstack::params::pg_director_server_port,
+  $pg_username                   = $quickstack::params::pg_username,
+  $pg_password                   = $quickstack::params::pg_password,
+  $pg_servertimeout              = $quickstack::params::pg_servertimeout,
+  $pg_enable_metadata_agent      = $quickstack::params::pg_enable_metadata_agent,
   $controller_priv_host          = $quickstack::params::controller_priv_host,
   $controller_pub_host           = $quickstack::params::controller_pub_host,
   $glance_db_password            = $quickstack::params::glance_db_password,
@@ -53,7 +60,7 @@ class quickstack::neutron::controller (
   $glance_backend                = $quickstack::params::glance_backend,
   $glance_rbd_store_user         = $quickstack::params::glance_rbd_store_user,
   $glance_rbd_store_pool         = $quickstack::params::glance_rbd_store_pool,
-  $heat_auth_encrypt_key,
+  $heat_auth_encrypt_key         = $quickstack::params::heat_auth_encrypt_key,
   $heat_cfn                      = $quickstack::params::heat_cfn,
   $heat_cloudwatch               = $quickstack::params::heat_cloudwatch,
   $heat_db_password              = $quickstack::params::heat_db_password,
@@ -121,6 +128,12 @@ class quickstack::neutron::controller (
     $qpid_protocol = 'tcp'
     $amqp_port = '5672'
     $sql_connection = "mysql://neutron:${neutron_db_password}@${mysql_host}/neutron"
+  }
+
+  if $neutron_core_plugin == 'neutron.plugins.plumgrid.plumgrid_plugin.plumgrid_plugin.NeutronPluginPLUMgridV2' {
+    $neutron_db_manage_cmd = 'neutron-db-manage --config-file /etc/neutron/neutron.conf --config-file /etc/neutron/plugin.ini stamp icehouse'
+  } else {
+    $neutron_db_manage_cmd = 'neutron-db-manage --config-file /etc/neutron/neutron.conf --config-file /etc/neutron/plugin.ini upgrade head'
   }
 
   class { 'quickstack::controller_common':
@@ -251,7 +264,8 @@ class quickstack::neutron::controller (
   # a review request open right now: https://review.openstack.org/#/c/50162/
   # If and when that is merged (or similar), the below can be removed.
   exec { 'neutron-db-manage upgrade':
-    command     => 'neutron-db-manage --config-file /etc/neutron/neutron.conf --config-file /etc/neutron/plugin.ini upgrade head',
+    #command     => 'neutron-db-manage --config-file /etc/neutron/neutron.conf --config-file /etc/neutron/plugin.ini upgrade head',
+    command     => $neutron_db_manage_cmd,
     path        => '/usr/bin',
     user        => 'neutron',
     logoutput   => 'on_failure',
@@ -310,6 +324,29 @@ class quickstack::neutron::controller (
       mysql_ca                     => $mysql_ca,
       tenant_network_type          => $tenant_network_type,
     }
+  }
+
+  if $neutron_core_plugin == 'neutron.plugins.plumgrid.plumgrid_plugin.plumgrid_plugin.NeutronPluginPLUMgridV2' {
+    class { 'quickstack::neutron::plugins::plumgrid':
+      pg_connection               => $sql_connection,
+      pg_director_server          => $pg_director_server,
+      pg_director_server_port     => $pg_director_server_port,
+      pg_username                 => $pg_username,
+      pg_password                 => $pg_password,
+      pg_servertimeout            => $pg_servertimeout,
+      pg_enable_metadata_agent    => $pg_enable_metadata_agent,
+    }
+    
+     nova_config { 'DEFAULT/scheduler_driver': value => 'nova.scheduler.filter_scheduler.FilterScheduler' }
+     nova_config { 'DEFAULT/libvirt_vif_type': value => 'ethernet'}
+     nova_config { 'DEFAULT/libvirt_cpu_mode': value => 'none'}
+
+    class { 'openstack::auth_file':
+      admin_password          => $admin_password,
+      admin_tenant            => 'admin',
+      controller_node         => $controller_priv_host,
+    }
+
   }
 
   firewall { '001 neutron server (API)':
