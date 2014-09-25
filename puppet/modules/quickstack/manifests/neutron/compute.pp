@@ -15,6 +15,7 @@ class quickstack::neutron::compute (
   $neutron_db_password          = $quickstack::params::neutron_db_password,
   $neutron_user_password        = $quickstack::params::neutron_user_password,
   $neutron_host                 = '127.0.0.1',
+  $enable_plumgrid              = 'false',
   $nova_db_password             = $quickstack::params::nova_db_password,
   $nova_user_password           = $quickstack::params::nova_user_password,
   $ovs_bridge_mappings          = $quickstack::params::ovs_bridge_mappings,
@@ -91,7 +92,7 @@ class quickstack::neutron::compute (
     'keystone_authtoken/admin_password':    value => $neutron_user_password;
   }
 
-  if $neutron_core_plugin == 'neutron.plugins.plumgrid.plumgrid_plugin.plumgrid_plugin.NeutronPluginPLUMgridV2' {
+  if $enable_plumgrid == 'true' {
 
     include nova::params
 
