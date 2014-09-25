@@ -127,7 +127,7 @@ class quickstack::params (
   $plumgrid_plugin               = 'neutron.plugins.plumgrid.plumgrid_plugin.plumgrid_plugin.NeutronPluginPLUMgridV2',
   $pg_connection                 = 'db_connection',
   $pg_director_server            = 'PLUMgrid_Virtual_IP',
-  $pg_director_server_port       = 'PLUMgrid_Director_Port',
+  $pg_director_server_port       = '443',
   $pg_username                   = 'PLUMgrid_Director_Admin',
   $pg_password                   = 'PLUMgrid_Director_Admin_Password',
   $pg_servertimeout              = '70',
