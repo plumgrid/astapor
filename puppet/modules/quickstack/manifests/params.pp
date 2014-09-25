@@ -11,20 +11,20 @@ class quickstack::params (
   # Passwords are currently changed to decent strings by sed
   # during the setup process. This will move to the Foreman API v2
   # at some point.
-  $admin_password             = 'CHANGEME'
-  $ceilometer_metering_secret = 'CHANGEME'
-  $ceilometer_user_password   = 'CHANGEME'
-  $heat_user_password         = 'CHANGEME'
-  $heat_db_password           = 'CHANGEME'
-  $heat_auth_encrypt_key      = 'CHANGEME'
-  $horizon_secret_key         = 'CHANGEME'
-  $keystone_admin_token       = 'CHANGEME'
-  $keystone_db_password       = 'CHANGEME'
-  $mysql_root_password        = 'CHANGEME'
-  $neutron_db_password        = 'CHANGEME'
-  $neutron_user_password      = 'CHANGEME'
-  $nova_db_password           = 'CHANGEME'
-  $nova_user_password         = 'CHANGEME'
+  $admin_password             = 'CHANGEME',
+  $ceilometer_metering_secret = 'CHANGEME',
+  $ceilometer_user_password   = 'CHANGEME',
+  $heat_user_password         = 'CHANGEME',
+  $heat_db_password           = 'CHANGEME',
+  $heat_auth_encrypt_key      = 'CHANGEME',
+  $horizon_secret_key         = 'CHANGEME',
+  $keystone_admin_token       = 'CHANGEME',
+  $keystone_db_password       = 'CHANGEME',
+  $mysql_root_password        = 'CHANGEME',
+  $neutron_db_password        = 'CHANGEME',
+  $neutron_user_password      = 'CHANGEME',
+  $nova_db_password           = 'CHANGEME',
+  $nova_user_password         = 'CHANGEME',
 
   # Cinder
   $cinder_db_password           = 'CHANGEME',
@@ -122,16 +122,16 @@ class quickstack::params (
   # If using the Cisco plugin, use either OVS or n1k for virtualised l2
   $cisco_vswitch_plugin          = 'neutron.plugins.openvswitch.ovs_neutron_plugin.OVSNeutronPluginV2',
   # If using the Cisco plugin, Nexus hardware can be used for l2
-  $cisco_nexus_plugin            = 'neutron.plugins.cisco.nexus.cisco_nexus_plugin_v2.NexusPlugin'
+  $cisco_nexus_plugin            = 'neutron.plugins.cisco.nexus.cisco_nexus_plugin_v2.NexusPlugin',
   # If using PLUMgrid plugin, please provide the following configurations
-  $plumgrid_plugin               = 'neutron.plugins.plumgrid.plumgrid_plugin.plumgrid_plugin.NeutronPluginPLUMgridV2'
-  $pg_connection                 = 'db_connection'
-  $pg_director_server            = 'PLUMgrid_Virtual_IP'
-  $pg_director_server_port       = 'PLUMgrid_Director_Port'
-  $pg_username                   = 'PLUMgrid_Director_Admin'
-  $pg_password                   = 'PLUMgrid_Director_Admin_Password'
-  $pg_servertimeout              = '70'
-  $pg_enable_metadata_agent      = false
+  $plumgrid_plugin               = 'neutron.plugins.plumgrid.plumgrid_plugin.plumgrid_plugin.NeutronPluginPLUMgridV2',
+  $pg_connection                 = 'db_connection',
+  $pg_director_server            = 'PLUMgrid_Virtual_IP',
+  $pg_director_server_port       = 'PLUMgrid_Director_Port',
+  $pg_username                   = 'PLUMgrid_Director_Admin',
+  $pg_password                   = 'PLUMgrid_Director_Admin_Password',
+  $pg_servertimeout              = '70',
+  $pg_enable_metadata_agent      = false,
   # End PLUMgrid config
 
   # If using the nexus sub plugin, specify the hardware layout by
