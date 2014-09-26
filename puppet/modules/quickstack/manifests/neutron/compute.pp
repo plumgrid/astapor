@@ -47,7 +47,6 @@ class quickstack::neutron::compute (
   $private_iface                = '',
   $private_ip                   = '',
   $private_network              = '',
-  $use_qemu_for_poc             = $quickstack::params::use_qemu_for_poc,
 ) inherits quickstack::params {
 
   if str2bool_i("$ssl") {
@@ -105,9 +104,6 @@ class quickstack::neutron::compute (
 
     nova_config { 'DEFAULT/scheduler_driver': value => 'nova.scheduler.filter_scheduler.FilterScheduler' }
     nova_config { 'DEFAULT/libvirt_vif_type': value => 'ethernet'}
-    if $use_qemu_for_poc == 'false' {
-      nova_config { 'DEFAULT/libvirt_cpu_mode': value => 'none'}
-    }
 
     # forward all ipv4 traffic
     # this is required for the vms to pass through the gateways
