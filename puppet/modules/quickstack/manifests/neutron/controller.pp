@@ -313,6 +313,9 @@ class quickstack::neutron::controller (
   }
 
   if $neutron_core_plugin == 'neutron.plugins.plumgrid.plumgrid_plugin.plumgrid_plugin.NeutronPluginPLUMgridV2' {
+    neutron_config {
+      'DEFAULT/service_plugins': ensure => absent,
+    }->
     class { 'quickstack::neutron::plugins::plumgrid':
       pg_connection               => $sql_connection,
       pg_director_server          => $pg_director_server,
@@ -323,16 +326,15 @@ class quickstack::neutron::controller (
       pg_enable_metadata_agent    => $pg_enable_metadata_agent,
     }
     
-     nova_config { 'DEFAULT/scheduler_driver': value => 'nova.scheduler.filter_scheduler.FilterScheduler' }
-     nova_config { 'DEFAULT/libvirt_vif_type': value => 'ethernet'}
-     nova_config { 'DEFAULT/libvirt_cpu_mode': value => 'none'}
+    nova_config { 'DEFAULT/scheduler_driver': value => 'nova.scheduler.filter_scheduler.FilterScheduler' }
+    nova_config { 'DEFAULT/libvirt_vif_type': value => 'ethernet'}
+    nova_config { 'DEFAULT/libvirt_cpu_mode': value => 'none'}
 
     class { 'openstack::auth_file':
       admin_password          => $admin_password,
       admin_tenant            => 'admin',
       controller_node         => $controller_priv_host,
     }
-
   }
 
   firewall { '001 neutron server (API)':
