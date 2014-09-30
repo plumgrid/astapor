@@ -24,6 +24,8 @@ class quickstack::neutron::compute (
   $neutron_user_password        = $quickstack::params::neutron_user_password,
   $neutron_host                 = '127.0.0.1',
   $enable_plumgrid              = 'false',
+  $pg_fw_src                    = $quickstack::params::pg_fw_src,
+  $pg_fw_dest                   = $quickstack::params::pg_fw_dest,
   $nova_db_password             = $quickstack::params::nova_db_password,
   $nova_user_password           = $quickstack::params::nova_user_password,
   $ovs_bridge_mappings          = $quickstack::params::ovs_bridge_mappings,
@@ -129,6 +131,16 @@ class quickstack::neutron::compute (
     nova::generic_service { 'network.filters':
       package_name   => $::nova::params::network_package_name,
       service_name   => $::nova::params::network_service_name,
+    }
+
+    if $pg_fw_src != undef {
+      firewall { '001 plumgrid rpc':
+        proto       => 'tcp',
+        action      => 'accept',
+        state       => ['NEW'],
+        destination => $pg_fw_dest,
+        source      => $pg_fw_src,
+      }
     }
 
     class { 'libvirt':
