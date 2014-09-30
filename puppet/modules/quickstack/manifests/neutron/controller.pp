@@ -53,6 +53,8 @@ class quickstack::neutron::controller (
   $pg_password                   = $quickstack::params::pg_password,
   $pg_servertimeout              = $quickstack::params::pg_servertimeout,
   $pg_enable_metadata_agent      = $quickstack::params::pg_enable_metadata_agent,
+  $pg_fw_src                     = $quickstack::params::pg_fw_src,
+  $pg_fw_dest                    = $quickstack::params::pg_fw_dest,
   $controller_priv_host          = $quickstack::params::controller_priv_host,
   $controller_pub_host           = $quickstack::params::controller_pub_host,
   $glance_db_password            = $quickstack::params::glance_db_password,
@@ -338,6 +340,8 @@ class quickstack::neutron::controller (
       pg_password                 => $pg_password,
       pg_servertimeout            => $pg_servertimeout,
       pg_enable_metadata_agent    => $pg_enable_metadata_agent,
+      pg_fw_src                   => $pg_fw_src,
+      pg_fw_dest                  => $pg_fw_dest,
     }
     
     nova_config { 'DEFAULT/scheduler_driver': value => 'nova.scheduler.filter_scheduler.FilterScheduler' }
