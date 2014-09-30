@@ -14,13 +14,16 @@ class quickstack::neutron::plugins::plumgrid (
   $pg_fw_dest               = $quickstack::params::pg_fw_dest,
 ) inherits quickstack::params {
 
-  firewall { '001 plumgrid rpc':
-    proto       => 'tcp',
-    action      => 'accept',
-    state       => ['NEW'],
-    destination => $pg_fw_dest,
-    source      => $pg_fw_src,
-  }->
+  if $pg_fw_src != undef {
+    firewall { '001 plumgrid rpc':
+      proto       => 'tcp',
+      action      => 'accept',
+      state       => ['NEW'],
+      destination => $pg_fw_dest,
+      source      => $pg_fw_src,
+      before      => Class['::neutron::plugins::plumgrid'],
+    }
+  }
   class { '::neutron::plugins::plumgrid':
    package_ensure          => $package_ensure,
    connection              => $pg_connection,
