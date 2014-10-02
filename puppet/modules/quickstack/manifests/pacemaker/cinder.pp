@@ -67,7 +67,15 @@ class quickstack::pacemaker::cinder(
     $glance_host          = map_params("glance_admin_vip")
     $keystone_host        = map_params("keystone_admin_vip")
 
-    Exec['i-am-cinder-vip-OR-cinder-is-up-on-vip'] -> Exec['cinder-manage db_sync'] -> Exec['pcs-cinder-server-set-up']
+    # TODO: extract this into a helper function
+    if ($::pcs_setup_cinder ==  undef or
+        !str2bool_i("$::pcs_setup_cinder")) {
+      $_enabled = true
+    } else {
+      $_enabled = false
+    }
+
+    Exec['i-am-cinder-vip-OR-cinder-is-up-on-vip'] ~> Exec<| title =='cinder-manage db_sync'|> -> Exec['pcs-cinder-server-set-up']
     if (str2bool_i(map_params('include_mysql'))) {
       Exec['galera-online'] -> Exec['i-am-cinder-vip-OR-cinder-is-up-on-vip']
     }
@@ -120,8 +128,10 @@ class quickstack::pacemaker::cinder(
       max_retries    => '-1',
       db_ssl         => $db_ssl,
       db_ssl_ca      => $db_ssl_ca,
+      enabled        => $_enabled,
       glance_host    => $glance_host,
       keystone_host  => $keystone_host,
+      manage_service => $_enabled,
       rpc_backend    => amqp_backend('cinder', map_params('amqp_provider')),
       amqp_host      => map_params('amqp_vip'),
       amqp_port      => map_params('amqp_port'),
@@ -130,13 +140,13 @@ class quickstack::pacemaker::cinder(
       qpid_heartbeat => $qpid_heartbeat,
       use_syslog     => $use_syslog,
       log_facility   => $log_facility,
-      enabled        => $enabled,
       debug          => $debug,
       verbose        => $verbose,
     }
 
-    Class['::quickstack::cinder']
-    ->
+    Class['::quickstack::cinder'] ->
+    Service[openstack-cinder-api] ->
+    Service[openstack-cinder-scheduler] ->
     exec {"pcs-cinder-server-set-up":
       command => "/usr/sbin/pcs property set cinder=running --force",
     } ->
@@ -148,26 +158,22 @@ class quickstack::pacemaker::cinder(
       tries     => 360,
       try_sleep => 10,
       command   => "/tmp/ha-all-in-one-util.bash all_members_include cinder",
-    }
-    ->
+    } ->
     quickstack::pacemaker::resource::service {'openstack-cinder-api':
       clone => true,
       options => 'start-delay=10s',
-    }
-    ->
+    } ->
     quickstack::pacemaker::resource::service {'openstack-cinder-scheduler':
       clone => true,
       options => 'start-delay=10s',
-    }
-    ->
+    } ->
     quickstack::pacemaker::constraint::base { 'cinder-api-scheduler-constr' :
       constraint_type => "order",
       first_resource  => "openstack-cinder-api-clone",
       second_resource => "openstack-cinder-scheduler-clone",
       first_action    => "start",
       second_action   => "start",
-    }
-    ->
+    } ->
     quickstack::pacemaker::constraint::colocation { 'cinder-api-scheduler-colo' :
       source => "openstack-cinder-scheduler-clone",
       target => "openstack-cinder-api-clone",
@@ -175,6 +181,12 @@ class quickstack::pacemaker::cinder(
     }
 
     if str2bool_i("$volume") {
+      # FIXME(jistr): remove the host override
+      # https://bugs.launchpad.net/cinder/+bug/1322190
+      cinder_config {
+        'DEFAULT/host': value => 'ha-controller';
+      }
+
       Class['::quickstack::cinder']
       ->
       class {'::quickstack::cinder_volume':
@@ -209,6 +221,8 @@ class quickstack::pacemaker::cinder(
         rbd_max_clone_depth    => $rbd_max_clone_depth,
         rbd_user               => $rbd_user,
         rbd_secret_uuid        => $rbd_secret_uuid,
+        enabled                => $_enabled,
+        manage_service         => $_enabled,
       }
       ->
       Exec['pcs-cinder-server-set-up']
@@ -216,38 +230,45 @@ class quickstack::pacemaker::cinder(
       Exec['all-cinder-nodes-are-up']
       ->
       quickstack::pacemaker::resource::service {'openstack-cinder-volume':
-        clone => true,
+        # FIXME(jistr): set 'clone => true'
+        # https://bugs.launchpad.net/cinder/+bug/1322190
         options => 'start-delay=10s',
       }
       ->
       quickstack::pacemaker::constraint::base { 'cinder-scheduler-volume-constr' :
         constraint_type => "order",
         first_resource  => "openstack-cinder-scheduler-clone",
-        second_resource => "openstack-cinder-volume-clone",
+        second_resource => "openstack-cinder-volume",
         first_action    => "start",
         second_action   => "start",
       }
       ->
       quickstack::pacemaker::constraint::colocation { 'cinder-scheduler-volume-colo' :
-        source => "openstack-cinder-volume-clone",
+        source => "openstack-cinder-volume",
         target => "openstack-cinder-scheduler-clone",
         score => "INFINITY",
       }
     }
 
-    # the rest is sad puppet hackery to install rbd/ceph packages,
-    # avoiding a "package" re-declaration (for python-ceph)
     if (str2bool_i($backend_rbd)) {
+      include ::quickstack::ceph::client_packages
+      include ::quickstack::pacemaker::ceph_config
+
+    # this block just some puppet hackery to install rbd/ceph
+    # packages, avoiding a "package" re-declaration (for python-ceph)
       if (str2bool_i(map_params('include_glance'))) {
         include ::quickstack::pacemaker::glance
         if ($::quickstack::pacemaker::glance::backend != 'rbd') {
-          package {'python-ceph': }
+          package {'python-ceph': } -> Class['quickstack::ceph::client_packages']
         }
       }
       else {
-        package {'python-ceph': }
+        package {'python-ceph': } -> Class['quickstack::ceph::client_packages']
       }
-      include ::quickstack::ceph::client_packages
+
+      Class['quickstack::pacemaker::ceph_config'] ->
+      Class['quickstack::ceph::client_packages'] ->
+      Exec['i-am-cinder-vip-OR-cinder-is-up-on-vip']
     }
   }
 }

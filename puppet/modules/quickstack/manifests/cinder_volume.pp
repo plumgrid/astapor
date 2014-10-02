@@ -36,13 +36,17 @@ class quickstack::cinder_volume(
   $rbd_max_clone_depth    = '5',
   $rbd_user               = 'volumes',
   $rbd_secret_uuid        = '',
+
+  $enabled                = true,
+  $manage_service         = true,
 ) {
-  class { '::cinder::volume': }
+  class { '::cinder::volume':
+    enabled        => str2bool_i("$enabled"),
+    manage_service => str2bool_i("$manage_service"),
+  }
 
   if str2bool_i("$backend_rbd") {
-    cinder_config {
-      'DEFAULT/glance_api_version':         value => '2',
-    }
+    class {'cinder::glance': }
   }
 
   if !str2bool_i("$multiple_backends") {
@@ -100,6 +104,7 @@ class quickstack::cinder_volume(
         eqlx_chap_password => $eqlx_chap_password[0],
       }
     } elsif str2bool_i("$backend_rbd") {
+      Class['quickstack::ceph::client_packages'] -> Cinder::Backend::Rbd<| |>
       class { '::cinder::volume::rbd':
         rbd_pool            => $rbd_pool,
         rbd_ceph_conf       => $rbd_ceph_conf,
@@ -191,6 +196,7 @@ class quickstack::cinder_volume(
 
     if str2bool_i("$backend_rbd") {
       $rbd_backends = ["rbd"]
+      Class['quickstack::ceph::client_packages'] -> Cinder::Backend::Rbd<| |>
 
       cinder::backend::rbd { 'rbd':
         volume_backend_name => $backend_rbd_name,
