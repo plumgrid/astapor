@@ -333,15 +333,17 @@ class quickstack::neutron::controller (
       'DEFAULT/service_plugins': ensure => absent,
     }->
     class { 'quickstack::neutron::plugins::plumgrid':
-      pg_connection               => $sql_connection,
-      pg_director_server          => $pg_director_server,
-      pg_director_server_port     => $pg_director_server_port,
-      pg_username                 => $pg_username,
-      pg_password                 => $pg_password,
-      pg_servertimeout            => $pg_servertimeout,
-      pg_enable_metadata_agent    => $pg_enable_metadata_agent,
-      pg_fw_src                   => $pg_fw_src,
-      pg_fw_dest                  => $pg_fw_dest,
+      pg_connection                 => $sql_connection,
+      pg_director_server            => $pg_director_server,
+      pg_director_server_port       => $pg_director_server_port,
+      pg_username                   => $pg_username,
+      pg_password                   => $pg_password,
+      pg_servertimeout              => $pg_servertimeout,
+      pg_enable_metadata_agent      => $pg_enable_metadata_agent,
+      admin_password                => $admin_password,
+      neutron_metadata_proxy_secret => $neutron_metadata_proxy_secret,      
+      pg_fw_src                     => $pg_fw_src,
+      pg_fw_dest                    => $pg_fw_dest,
     }
     
     nova_config { 'DEFAULT/scheduler_driver': value => 'nova.scheduler.filter_scheduler.FilterScheduler' }
