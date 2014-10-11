@@ -349,12 +349,6 @@ class quickstack::neutron::controller (
     nova_config { 'DEFAULT/scheduler_driver': value => 'nova.scheduler.filter_scheduler.FilterScheduler' }
     nova_config { 'DEFAULT/libvirt_vif_type': value => 'ethernet'}
     nova_config { 'DEFAULT/libvirt_cpu_mode': value => 'none'}
-
-    class { 'openstack::auth_file':
-      admin_password          => $admin_password,
-      admin_tenant            => 'admin',
-      controller_node         => $controller_priv_host,
-    }
   }
 
   firewall { '001 neutron server (API)':
