@@ -131,7 +131,6 @@ class quickstack::params (
   $pg_username                   = 'PLUMgrid_Director_Admin',
   $pg_password                   = 'PLUMgrid_Director_Admin_Password',
   $pg_servertimeout              = '70',
-  $pg_enable_metadata_agent      = false,
   $pg_fw_src                     = undef,
   $pg_fw_dest                    = undef,
   # End PLUMgrid config

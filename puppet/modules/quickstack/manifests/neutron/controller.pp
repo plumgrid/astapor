@@ -52,7 +52,7 @@ class quickstack::neutron::controller (
   $pg_username                   = $quickstack::params::pg_username,
   $pg_password                   = $quickstack::params::pg_password,
   $pg_servertimeout              = $quickstack::params::pg_servertimeout,
-  $pg_enable_metadata_agent      = $quickstack::params::pg_enable_metadata_agent,
+  $pg_enable_metadata_agent      = false,
   $pg_fw_src                     = $quickstack::params::pg_fw_src,
   $pg_fw_dest                    = $quickstack::params::pg_fw_dest,
   $controller_priv_host          = $quickstack::params::controller_priv_host,
