@@ -72,6 +72,14 @@ class quickstack::pacemaker::params (
   $neutron_group             = 'neutron',
   $neutron_db_password       = '',
   $neutron_user_password     = '',
+  # If using PLUMgrid plugin, please provide the following configurations
+  $pg_director_server        = 'PLUMgrid_Virtual_IP',
+  $pg_username               = 'PLUMgrid_Director_Admin',
+  $pg_password               = 'PLUMgrid_Director_Admin_Password',
+  $pg_fw_src                 = undef,
+  $pg_fw_dest                = undef,
+  $pg_enable_metadata_agent  = false,
+  # End PLUMgrid config
   $nova_public_vip           = '',
   $nova_private_vip          = '',
   $nova_admin_vip            = '',

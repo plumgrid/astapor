@@ -20,6 +20,8 @@ class quickstack::pacemaker::neutron (
   $ovs_tunnel_types           = [],
   $tenant_network_type        = 'vlan',
   $tunnel_id_ranges           = '1:1000',
+  $pg_director_server_port    = '443',
+  $pg_servertimeout           = '70',
   $verbose                    = 'false',
 ) {
   include quickstack::pacemaker::common
@@ -109,6 +111,14 @@ class quickstack::pacemaker::neutron (
       ovs_vlan_ranges               => $ovs_vlan_ranges,
       ovs_vxlan_udp_port            => $ovs_vxlan_udp_port,
       ovs_tunnel_types              => $ovs_tunnel_types,
+      pg_director_server            => map_params("pg_director_server"),
+      pg_director_server_port       => $pg_director_server_port,
+      pg_username                   => map_params("pg_username"),
+      pg_password                   => map_params("pg_password"),
+      pg_enable_metadata_agent      => map_params("pg_enable_metadata_agent"),
+      pg_servertimeout              => $pg_servertimeout,
+      pg_fw_src                     => map_params("pg_fw_src"),
+      pg_fw_dest                    => map_params("pg_fw_dest"),
       rpc_backend                   => amqp_backend('neutron', map_params('amqp_provider')),
       amqp_host                     => map_params("amqp_vip"),
       amqp_port                     => map_params("amqp_port"),

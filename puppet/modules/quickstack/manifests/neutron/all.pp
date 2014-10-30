@@ -18,6 +18,14 @@ class quickstack::neutron::all (
   $ml2_vxlan_group               = '224.0.0.1',
   $ml2_vni_ranges                = ['10:100'],
   $ml2_security_group            = 'True',
+  $pg_director_server            = '',
+  $pg_director_server_port       = '',
+  $pg_username                   = '',
+  $pg_password                   = '',
+  $pg_servertimeout              = '',
+  $pg_enable_metadata_agent      = false,
+  $pg_fw_src                     = '',
+  $pg_fw_dest                    = '',
   $mysql_ca                      = undef,
   $mysql_host                    = '127.0.0.1',
   $neutron_core_plugin           = 'neutron.plugins.ml2.plugin.Ml2Plugin',
@@ -146,45 +154,68 @@ class quickstack::neutron::all (
     }
   }
 
-  class { '::nova::network::neutron':
-    neutron_admin_password => $neutron_user_password,
-    neutron_url            => "http://${neutron_url}:9696",
-    neutron_admin_auth_url => "http://${auth_host}:35357/v2.0",
+  if $neutron_core_plugin == 'neutron.plugins.plumgrid.plumgrid_plugin.plumgrid_plugin.NeutronPluginPLUMgridV2' {
+    neutron_config {
+      'DEFAULT/service_plugins': ensure => absent,
+    }->
+    class { 'quickstack::neutron::plugins::plumgrid':
+      pg_connection                 => $sql_connection,
+      pg_director_server            => $pg_director_server,
+      pg_director_server_port       => $pg_director_server_port,
+      pg_username                   => $pg_username,
+      pg_password                   => $pg_password,
+      pg_servertimeout              => $pg_servertimeout,
+      pg_enable_metadata_agent      => $pg_enable_metadata_agent,
+      admin_password                => $neutron_user_password,
+      neutron_metadata_proxy_secret => $neutron_metadata_proxy_secret,      
+      pg_fw_src                     => $pg_fw_src,
+      pg_fw_dest                    => $pg_fw_dest,
+    }
+    
+    nova_config { 'DEFAULT/scheduler_driver': value => 'nova.scheduler.filter_scheduler.FilterScheduler' }
+    nova_config { 'DEFAULT/libvirt_vif_type': value => 'ethernet'}
+    nova_config { 'DEFAULT/libvirt_cpu_mode': value => 'none'}
   }
+  else {
+    class { '::nova::network::neutron':
+      neutron_admin_password => $neutron_user_password,
+      neutron_url            => "http://${neutron_url}:9696",
+      neutron_admin_auth_url => "http://${auth_host}:35357/v2.0",
+    }
 
-  $local_ip = find_ip("$ovs_tunnel_network","$ovs_tunnel_iface","")
+    $local_ip = find_ip("$ovs_tunnel_network","$ovs_tunnel_iface","")
 
-  class { '::neutron::agents::ovs':
-    bridge_mappings  => $ovs_bridge_mappings,
-    bridge_uplinks   => $ovs_bridge_uplinks,
-    enabled          => str2bool_i("$enabled"),
-    enable_tunneling => str2bool_i("$enable_tunneling"),
-    local_ip         => $local_ip,
-    manage_service   => str2bool_i("$manage_service"),
-    tunnel_types     => $ovs_tunnel_types,
-    vxlan_udp_port   => $ovs_vxlan_udp_port,
+    class { '::neutron::agents::ovs':
+      bridge_mappings  => $ovs_bridge_mappings,
+      bridge_uplinks   => $ovs_bridge_uplinks,
+      enabled          => str2bool_i("$enabled"),
+      enable_tunneling => str2bool_i("$enable_tunneling"),
+      local_ip         => $local_ip,
+      manage_service   => str2bool_i("$manage_service"),
+      tunnel_types     => $ovs_tunnel_types,
+      vxlan_udp_port   => $ovs_vxlan_udp_port,
+    }
+
+    class { '::neutron::agents::dhcp':
+      enabled        => str2bool_i("$enabled"),
+      manage_service => str2bool_i("$manage_service"),
+    }
+
+    class { '::neutron::agents::l3':
+      enabled                 => str2bool_i("$enabled"),
+      external_network_bridge => $external_network_bridge,
+      manage_service          => str2bool_i("$manage_service"),
+    }
+
+    class { 'neutron::agents::metadata':
+      auth_password  => $neutron_user_password,
+      auth_url       => "http://${auth_host}:35357/v2.0",
+      enabled        => str2bool_i("$enabled"),
+      manage_service => str2bool_i("$manage_service"),
+      metadata_ip    => $neutron_priv_host,
+      shared_secret  => $neutron_metadata_proxy_secret,
+    }
   }
-
-  class { '::neutron::agents::dhcp':
-    enabled        => str2bool_i("$enabled"),
-    manage_service => str2bool_i("$manage_service"),
-  }
-
-  class { '::neutron::agents::l3':
-    enabled                 => str2bool_i("$enabled"),
-    external_network_bridge => $external_network_bridge,
-    manage_service          => str2bool_i("$manage_service"),
-  }
-
-  class { 'neutron::agents::metadata':
-    auth_password  => $neutron_user_password,
-    auth_url       => "http://${auth_host}:35357/v2.0",
-    enabled        => str2bool_i("$enabled"),
-    manage_service => str2bool_i("$manage_service"),
-    metadata_ip    => $neutron_priv_host,
-    shared_secret  => $neutron_metadata_proxy_secret,
-  }
-
   include quickstack::neutron::notifications
 
   #class { 'neutron::agents::lbaas': }
