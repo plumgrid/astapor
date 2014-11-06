@@ -177,14 +177,6 @@ class quickstack::neutron::compute (
       vxlan_udp_port      => $ovs_vxlan_udp_port,
     }
 
-    class { '::neutron::plugins::ovs':
-      sql_connection      => $sql_connection,
-      tenant_network_type => $tenant_network_type,
-      network_vlan_ranges => $ovs_vlan_ranges,
-      tunnel_id_ranges    => $tunnel_id_ranges,
-      vxlan_udp_port      => $ovs_vxlan_udp_port,
-    }
-
     neutron_plugin_ovs { 'AGENT/l2_population': value => "$ovs_l2_population"; }
 
     $local_ip = find_ip("$ovs_tunnel_network","$ovs_tunnel_iface","")

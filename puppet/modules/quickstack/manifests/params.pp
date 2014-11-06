@@ -123,7 +123,7 @@ class quickstack::params (
   $cisco_vswitch_plugin          = 'neutron.plugins.openvswitch.ovs_neutron_plugin.OVSNeutronPluginV2',
   # If using the Cisco plugin, Nexus hardware can be used for l2
   $cisco_nexus_plugin            = 'neutron.plugins.cisco.nexus.cisco_nexus_plugin_v2.NexusPlugin',
-  $agent_type			               = 'ovs',
+  $agent_type                    = 'ovs',
   # If using PLUMgrid plugin, please provide the following configurations
   $plumgrid_plugin               = 'neutron.plugins.plumgrid.plumgrid_plugin.plumgrid_plugin.NeutronPluginPLUMgridV2',
   $pg_connection                 = 'db_connection',
