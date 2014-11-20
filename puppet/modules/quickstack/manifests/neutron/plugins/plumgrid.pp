@@ -14,6 +14,7 @@ class quickstack::neutron::plugins::plumgrid (
   $neutron_metadata_proxy_secret = $quickstack::params::neutron_metadata_proxy_secret,
   $pg_fw_src                     = $quickstack::params::pg_fw_src,
   $pg_fw_dest                    = $quickstack::params::pg_fw_dest,
+  $controller_priv_host          = $quickstack::params::controller_priv_host,
 ) inherits quickstack::params {
 
   if $pg_fw_src != undef {
@@ -45,6 +46,7 @@ class quickstack::neutron::plugins::plumgrid (
    pg_enable_metadata_agent => $pg_enable_metadata_agent,
    admin_password           => $admin_password,
    metadata_proxy_secret    => $neutron_metadata_proxy_secret,
+   controller_priv_host     => $controller_priv_host,
   }
 
 }
