@@ -34,8 +34,33 @@ class quickstack::neutron::all (
   $neutron_priv_host             = '127.0.0.1',
   $neutron_url                   = '127.0.0.1',
   $neutron_user_password,
-  $nexus_config                  = '',
-  $nexus_credentials             = '',
+  $nexus_config                  = {},
+  $nexus_credentials             = [],
+  $neutron_conf_additional_params = { default_quota => 'default',
+                                      quota_network => 'default',
+                                      quota_subnet => 'default',
+                                      quota_port => 'default',
+                                      quota_security_group => 'default',
+                                      quota_security_group_rule  => 'default',
+                                      network_auto_schedule => 'default',
+                                    },
+  $nova_conf_additional_params   = { quota_instances => 'default',
+                                     quota_cores => 'default',
+                                     quota_ram => 'default',
+                                     quota_floating_ips => 'default',
+                                     quota_fixed_ips => 'default',
+                                     quota_driver => 'default',
+                                     },
+  $n1kv_plugin_additional_params = { default_policy_profile => 'default-pp',
+                                     network_node_policy_profile => 'default-pp',
+                                     poll_duration => '10',
+                                     http_pool_size => '4',
+                                     http_timeout => '120',
+                                     firewall_driver => 'neutron.agent.firewall.NoopFirewallDriver',
+                                     enable_sync_on_start => 'True',
+                                     },
+  $n1kv_vsm_ip                   = '0.0.0.0',
+  $n1kv_vsm_password             = undef,
   $ovs_bridge_mappings           = [],
   $ovs_bridge_uplinks            = [],
   $ovs_tunnel_iface              = '',
@@ -51,6 +76,7 @@ class quickstack::neutron::all (
   $amqp_username                 = '',
   $amqp_password                 = '',
   $rpc_backend                   = 'neutron.openstack.common.rpc.impl_kombu',
+  $security_group_api            = 'neutron',
   $tenant_network_type           = 'vlan',
   $verbose                       = 'false',
   $ssl                           = 'false',
@@ -139,18 +165,37 @@ class quickstack::neutron::all (
 
   if $neutron_core_plugin == 'neutron.plugins.cisco.network_plugin.PluginV2' {
     class { 'quickstack::neutron::plugins::cisco':
+      cisco_vswitch_plugin         => $cisco_vswitch_plugin,
+      cisco_nexus_plugin           => $cisco_nexus_plugin,
+      n1kv_vsm_ip                  => $n1kv_vsm_ip,
+      n1kv_vsm_password            => $n1kv_vsm_password,
+      n1kv_plugin_additional_params => $n1kv_plugin_additional_params,
+      n1kv_os_ha                  => 'true',
+      neutron_core_plugin          => $neutron_core_plugin,
       neutron_db_password          => $neutron_db_password,
       neutron_user_password        => $neutron_user_password,
-      ovs_vlan_ranges              => $ovs_vlan_ranges,
-      cisco_vswitch_plugin         => $cisco_vswitch_plugin,
       nexus_config                 => $nexus_config,
-      cisco_nexus_plugin           => $cisco_nexus_plugin,
       nexus_credentials            => $nexus_credentials,
-      provider_vlan_auto_create    => $provider_vlan_auto_create,
-      provider_vlan_auto_trunk     => $provider_vlan_auto_trunk,
       mysql_host                   => $mysql_host,
       mysql_ca                     => $mysql_ca,
+      ovs_vlan_ranges              => $ovs_vlan_ranges,
+      provider_vlan_auto_create    => $provider_vlan_auto_create,
+      provider_vlan_auto_trunk     => $provider_vlan_auto_trunk,
       tenant_network_type          => $tenant_network_type,
+    }
+  } else {
+    $local_ip = find_ip("$ovs_tunnel_network",
+                      ["$ovs_tunnel_iface","$external_network_bridge"],
+                      "")
+    class { '::neutron::agents::ovs':
+      bridge_mappings  => $ovs_bridge_mappings,
+      bridge_uplinks   => $ovs_bridge_uplinks,
+      enabled          => str2bool_i("$enabled"),
+      enable_tunneling => str2bool_i("$enable_tunneling"),
+      local_ip         => $local_ip,
+      manage_service   => str2bool_i("$manage_service"),
+      tunnel_types     => $ovs_tunnel_types,
+      vxlan_udp_port   => $ovs_vxlan_udp_port,
     }
   }
 
@@ -177,12 +222,6 @@ class quickstack::neutron::all (
     nova_config { 'DEFAULT/libvirt_cpu_mode': value => 'none'}
   }
   else {
-    class { '::nova::network::neutron':
-      neutron_admin_password => $neutron_user_password,
-      neutron_url            => "http://${neutron_url}:9696",
-      neutron_admin_auth_url => "http://${auth_host}:35357/v2.0",
-    }
-
     $local_ip = find_ip("$ovs_tunnel_network","$ovs_tunnel_iface","")
 
     class { '::neutron::agents::ovs':
@@ -194,6 +233,13 @@ class quickstack::neutron::all (
       manage_service   => str2bool_i("$manage_service"),
       tunnel_types     => $ovs_tunnel_types,
       vxlan_udp_port   => $ovs_vxlan_udp_port,
+    }
+
+    class { '::nova::network::neutron':
+      neutron_admin_password => $neutron_user_password,
+      neutron_url            => "http://${neutron_url}:9696",
+      neutron_admin_auth_url => "http://${auth_host}:35357/v2.0",
+      security_group_api     => $security_group_api,
     }
 
     class { '::neutron::agents::dhcp':
@@ -216,6 +262,11 @@ class quickstack::neutron::all (
       shared_secret  => $neutron_metadata_proxy_secret,
     }
   }
+
+  neutron_config {
+    'DEFAULT/host': value => 'neutron-n-0';
+  }
+
   include quickstack::neutron::notifications
 
   #class { 'neutron::agents::lbaas': }
@@ -229,4 +280,13 @@ class quickstack::neutron::all (
   }
 
   class {'::quickstack::firewall::neutron':}
+
+  class {'::quickstack::neutron::plugins::neutron_config':
+    neutron_conf_additional_params => $neutron_conf_additional_params,
+  }
+ 
+  class {'::quickstack::neutron::plugins::nova_config':
+    nova_conf_additional_params => $nova_conf_additional_params,
+  }
+
 }
