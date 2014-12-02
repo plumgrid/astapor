@@ -183,7 +183,7 @@ class quickstack::neutron::all (
       provider_vlan_auto_trunk     => $provider_vlan_auto_trunk,
       tenant_network_type          => $tenant_network_type,
     }
-  } else {
+  } elsif $neutron_core_plugin != 'neutron.plugins.plumgrid.plumgrid_plugin.plumgrid_plugin.NeutronPluginPLUMgridV2' {
     $local_ip = find_ip("$ovs_tunnel_network",
                       ["$ovs_tunnel_iface","$external_network_bridge"],
                       "")
@@ -222,19 +222,6 @@ class quickstack::neutron::all (
     nova_config { 'DEFAULT/libvirt_cpu_mode': value => 'none'}
   }
   else {
-    $local_ip = find_ip("$ovs_tunnel_network","$ovs_tunnel_iface","")
-
-    class { '::neutron::agents::ovs':
-      bridge_mappings  => $ovs_bridge_mappings,
-      bridge_uplinks   => $ovs_bridge_uplinks,
-      enabled          => str2bool_i("$enabled"),
-      enable_tunneling => str2bool_i("$enable_tunneling"),
-      local_ip         => $local_ip,
-      manage_service   => str2bool_i("$manage_service"),
-      tunnel_types     => $ovs_tunnel_types,
-      vxlan_udp_port   => $ovs_vxlan_udp_port,
-    }
-
     class { '::nova::network::neutron':
       neutron_admin_password => $neutron_user_password,
       neutron_url            => "http://${neutron_url}:9696",
