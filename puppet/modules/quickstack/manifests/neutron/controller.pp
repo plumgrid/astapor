@@ -285,6 +285,7 @@ class quickstack::neutron::controller (
   class { '::nova::network::neutron':
     neutron_admin_password => $neutron_user_password,
     security_group_api     => $security_group_api,
+    neutron_url_timeout    => "150",
   }
   ->
   class { '::neutron::server::notifications':
