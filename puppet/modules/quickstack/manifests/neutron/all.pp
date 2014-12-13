@@ -215,6 +215,7 @@ class quickstack::neutron::all (
       neutron_metadata_proxy_secret => $neutron_metadata_proxy_secret,      
       pg_fw_src                     => $pg_fw_src,
       pg_fw_dest                    => $pg_fw_dest,
+      controller_priv_host          => $neutron_priv_host,
     }
     
     nova_config { 'DEFAULT/scheduler_driver': value => 'nova.scheduler.filter_scheduler.FilterScheduler' }
