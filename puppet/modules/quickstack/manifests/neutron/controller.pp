@@ -285,6 +285,7 @@ class quickstack::neutron::controller (
   class { '::nova::network::neutron':
     neutron_admin_password => $neutron_user_password,
     security_group_api     => $security_group_api,
+    neutron_url_timeout    => "150",
   }
   ->
   class { '::neutron::server::notifications':
@@ -392,6 +393,7 @@ class quickstack::neutron::controller (
       neutron_metadata_proxy_secret => $neutron_metadata_proxy_secret,      
       pg_fw_src                     => $pg_fw_src,
       pg_fw_dest                    => $pg_fw_dest,
+      controller_priv_host          => $controller_priv_host,
     }
     
     nova_config { 'DEFAULT/scheduler_driver': value => 'nova.scheduler.filter_scheduler.FilterScheduler' }

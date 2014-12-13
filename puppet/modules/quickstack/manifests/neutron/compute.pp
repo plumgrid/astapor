@@ -195,6 +195,7 @@ class quickstack::neutron::compute (
   class { '::nova::network::neutron':
     neutron_admin_password => $neutron_user_password,
     neutron_url            => "http://${neutron_host}:9696",
+    neutron_url_timeout    => "150",
     neutron_admin_auth_url => "http://${auth_host}:35357/v2.0",
     security_group_api     => $security_group_api,
   }
