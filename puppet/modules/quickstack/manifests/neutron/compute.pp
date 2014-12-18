@@ -138,12 +138,33 @@ class quickstack::neutron::compute (
     }
 
     if $pg_fw_src != undef {
+      firewall { '001 plumgrid udp':
+        proto       => 'udp',
+        action      => 'accept',
+        state       => ['NEW'],
+        destination => $pg_fw_dest,
+        source      => $pg_fw_src,
+        before      => Service['plumgrid'],
+      }
       firewall { '001 plumgrid rpc':
         proto       => 'tcp',
         action      => 'accept',
         state       => ['NEW'],
         destination => $pg_fw_dest,
         source      => $pg_fw_src,
+        before      => Service['plumgrid'],
+      }
+      firewall { '040 allow vrrp':
+        proto       => 'vrrp',
+        action      => 'accept',
+        before      => Service['plumgrid'],
+      }
+      firewall { '040 keepalived':
+        proto       => 'all',
+        action      => 'accept',
+        destination => '224.0.0.0/24',
+        source      => $pg_fw_src,
+        before      => Service['plumgrid'],
       }
     }
 

@@ -24,7 +24,7 @@ class quickstack::neutron::plugins::plumgrid (
       state       => ['NEW'],
       destination => $pg_fw_dest,
       source      => $pg_fw_src,
-      before      => Class['::neutron::plugins::plumgrid'],
+      before      => Service['plumgrid'],
     }
     firewall { '001 plumgrid rpc':
       proto       => 'tcp',
@@ -32,7 +32,19 @@ class quickstack::neutron::plugins::plumgrid (
       state       => ['NEW'],
       destination => $pg_fw_dest,
       source      => $pg_fw_src,
-      before      => Class['::neutron::plugins::plumgrid'],
+      before      => Service['plumgrid'],
+    }
+    firewall { '040 allow vrrp': 
+      proto       => 'vrrp', 
+      action      => 'accept',
+      before      => Service['plumgrid'],
+    }
+    firewall { '040 keepalived':
+      proto       => 'all',
+      action      => 'accept',
+      destination => '224.0.0.0/24',
+      source      => $pg_fw_src,
+      before      => Service['plumgrid'],
     }
   }
   class { '::neutron::plugins::plumgrid':
