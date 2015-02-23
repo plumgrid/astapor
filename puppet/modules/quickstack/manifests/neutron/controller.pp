@@ -381,20 +381,18 @@ class quickstack::neutron::controller (
     neutron_config {
       'DEFAULT/service_plugins': ensure => absent,
     }->
-    class { 'quickstack::neutron::plugins::plumgrid':
-      pg_connection                 => $sql_connection,
-      pg_director_server            => $pg_director_server,
-      pg_director_server_port       => $pg_director_server_port,
-      pg_username                   => $pg_username,
-      pg_password                   => $pg_password,
-      pg_servertimeout              => $pg_servertimeout,
-      pg_enable_metadata_agent      => $pg_enable_metadata_agent,
-      admin_password                => $admin_password,
-      pg_fw_src                     => $pg_fw_src,
-      pg_fw_dest                    => $pg_fw_dest,
-      controller_priv_host          => $controller_priv_host,
-    }
-    
+    class { '::neutron::plugins::plumgrid':
+      pg_connection            => $sql_connection,
+      pg_director_server       => $pg_director_server,
+      pg_director_server_port  => $pg_director_server_port,
+      pg_username              => $pg_username,
+      pg_password              => $pg_password,
+      pg_servertimeout         => $pg_servertimeout,
+      pg_enable_metadata_agent => $pg_enable_metadata_agent,
+      admin_password           => $admin_password,
+      controller_priv_host     => $controller_priv_host,
+    } 
+   
     nova_config { 'DEFAULT/scheduler_driver': value => 'nova.scheduler.filter_scheduler.FilterScheduler' }
     nova_config { 'DEFAULT/libvirt_vif_type': value => 'ethernet'}
     nova_config { 'DEFAULT/libvirt_cpu_mode': value => 'none'}
@@ -405,6 +403,37 @@ class quickstack::neutron::controller (
         shared_secret => $metadata_proxy_secret,
         auth_tenant   => 'admin',
         auth_user     => 'admin',
+      }
+    }
+
+    if $pg_fw_src != undef {
+      firewall { '001 plumgrid udp':
+        proto       => 'udp',
+        action      => 'accept',
+        state       => ['NEW'],
+        destination => $pg_fw_dest,
+        source      => $pg_fw_src,
+        before      => Class['::neutron::plugins::plumgrid'],
+      }
+      firewall { '001 plumgrid rpc':
+        proto       => 'tcp',
+        action      => 'accept',
+        state       => ['NEW'],
+        destination => $pg_fw_dest,
+        source      => $pg_fw_src,
+        before      => Class['::neutron::plugins::plumgrid'],
+      }
+      firewall { '040 allow vrrp':
+        proto       => 'vrrp',
+        action      => 'accept',
+        before      => Class['::neutron::plugins::plumgrid'],
+      }
+      firewall { '040 keepalived':
+        proto       => 'all',
+        action      => 'accept',
+        destination => '224.0.0.18/32',
+        source      => $pg_fw_src,
+        before      => Class['::neutron::plugins::plumgrid'],
       }
     }
   }
