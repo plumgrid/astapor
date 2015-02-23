@@ -390,7 +390,6 @@ class quickstack::neutron::controller (
       pg_servertimeout              => $pg_servertimeout,
       pg_enable_metadata_agent      => $pg_enable_metadata_agent,
       admin_password                => $admin_password,
-      neutron_metadata_proxy_secret => $neutron_metadata_proxy_secret,      
       pg_fw_src                     => $pg_fw_src,
       pg_fw_dest                    => $pg_fw_dest,
       controller_priv_host          => $controller_priv_host,
@@ -399,6 +398,15 @@ class quickstack::neutron::controller (
     nova_config { 'DEFAULT/scheduler_driver': value => 'nova.scheduler.filter_scheduler.FilterScheduler' }
     nova_config { 'DEFAULT/libvirt_vif_type': value => 'ethernet'}
     nova_config { 'DEFAULT/libvirt_cpu_mode': value => 'none'}
+
+    if $pg_enable_metadata_agent {
+      class { '::neutron::agents::metadata' :
+        auth_password => $admin_password,
+        shared_secret => $metadata_proxy_secret,
+        auth_tenant   => 'admin',
+        auth_user     => 'admin',
+      }
+    }
   }
 
   firewall { '001 neutron server (API)':

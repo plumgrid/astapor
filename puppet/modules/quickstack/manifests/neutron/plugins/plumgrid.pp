@@ -11,7 +11,6 @@ class quickstack::neutron::plugins::plumgrid (
   $pg_servertimeout              = $quickstack::params::pg_servertimeout,
   $pg_enable_metadata_agent      = $quickstack::params::pg_enable_metadata_agent,
   $admin_password                = $quickstack::params::admin_password,
-  $neutron_metadata_proxy_secret = $quickstack::params::neutron_metadata_proxy_secret,
   $pg_fw_src                     = $quickstack::params::pg_fw_src,
   $pg_fw_dest                    = $quickstack::params::pg_fw_dest,
   $controller_priv_host          = $quickstack::params::controller_priv_host,
@@ -57,8 +56,6 @@ class quickstack::neutron::plugins::plumgrid (
    pg_servertimeout         => $pg_servertimeout,
    pg_enable_metadata_agent => $pg_enable_metadata_agent,
    admin_password           => $admin_password,
-   metadata_proxy_secret    => $neutron_metadata_proxy_secret,
    controller_priv_host     => $controller_priv_host,
   }
-
 }
