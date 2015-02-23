@@ -2,15 +2,15 @@
 # === Parameters
 #
 class quickstack::neutron::plugins::plumgrid (
-  $pg_controller                 = undef,
-  $pg_compute                    = undef,
+  $pg_controller                 = false,
+  $pg_compute                    = false,
   $pg_connection                 = undef,
   $pg_director_server            = undef,
   $pg_director_server_port       = '443',
   $pg_username                   = undef,
   $pg_password                   = undef,
   $pg_servertimeout              = '99',
-  $pg_enable_metadata_agent      = undef,
+  $pg_enable_metadata_agent      = false,
   $admin_password                = $quickstack::pacemaker::params::keystone_user_password,
   $pg_fw_src                     = undef,
   $pg_fw_dest                    = undef,
