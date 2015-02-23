@@ -2,18 +2,19 @@
 # === Parameters
 #
 class quickstack::neutron::plugins::plumgrid (
-  $package_ensure                = 'installed',
-  $pg_connection                 = $quickstack::params::pg_connection,
-  $pg_director_server            = $quickstack::params::pg_director_server,
-  $pg_director_server_port       = $quickstack::params::pg_director_server_port,
-  $pg_username                   = $quickstack::params::pg_username,
-  $pg_password                   = $quickstack::params::pg_password,
-  $pg_servertimeout              = $quickstack::params::pg_servertimeout,
-  $pg_enable_metadata_agent      = $quickstack::params::pg_enable_metadata_agent,
-  $admin_password                = $quickstack::params::admin_password,
-  $pg_fw_src                     = $quickstack::params::pg_fw_src,
-  $pg_fw_dest                    = $quickstack::params::pg_fw_dest,
-  $controller_priv_host          = $quickstack::params::controller_priv_host,
+  $pg_controller                 = undef,
+  $pg_compute                    = undef,
+  $pg_connection                 = undef,
+  $pg_director_server            = undef,
+  $pg_director_server_port       = '443',
+  $pg_username                   = undef,
+  $pg_password                   = undef,
+  $pg_servertimeout              = '99',
+  $pg_enable_metadata_agent      = undef,
+  $admin_password                = $quickstack::pacemaker::params::keystone_user_password,
+  $pg_fw_src                     = undef,
+  $pg_fw_dest                    = undef,
+  $controller_priv_host          = $quickstack::pacemaker::params::keystone_admin_vip,
 ) inherits quickstack::params {
 
   if $pg_fw_src != undef {
@@ -41,21 +42,68 @@ class quickstack::neutron::plugins::plumgrid (
     firewall { '040 keepalived':
       proto       => 'all',
       action      => 'accept',
-      destination => '224.0.0.0/24',
+      destination => '224.0.0.18/32',
       source      => $pg_fw_src,
       before      => Service['plumgrid'],
     }
   }
-  class { '::neutron::plugins::plumgrid':
-   package_ensure           => $package_ensure,
-   pg_connection            => $pg_connection,
-   pg_director_server       => $pg_director_server,
-   pg_director_server_port  => $pg_director_server_port,
-   pg_username              => $pg_username,
-   pg_password              => $pg_password,
-   pg_servertimeout         => $pg_servertimeout,
-   pg_enable_metadata_agent => $pg_enable_metadata_agent,
-   admin_password           => $admin_password,
-   controller_priv_host     => $controller_priv_host,
+
+  nova_config { 'DEFAULT/scheduler_driver': value => 'nova.scheduler.filter_scheduler.FilterScheduler' }
+  nova_config { 'DEFAULT/libvirt_vif_type': value => 'ethernet'}
+  nova_config { 'DEFAULT/libvirt_cpu_mode': value => 'none'}
+
+  if $pg_controller {
+    neutron_config {
+      'DEFAULT/service_plugins': ensure => absent,
+    }->
+    class { '::neutron::plugins::plumgrid':
+     pg_connection            => $pg_connection,
+     pg_director_server       => $pg_director_server,
+     pg_director_server_port  => $pg_director_server_port,
+     pg_username              => $pg_username,
+     pg_password              => $pg_password,
+     pg_servertimeout         => $pg_servertimeout,
+     pg_enable_metadata_agent => $pg_enable_metadata_agent,
+     admin_password           => $admin_password,
+     controller_priv_host     => $controller_priv_host,
+    }
+
+    if $pg_enable_metadata_agent {
+      class { '::neutron::agents::metadata' :
+        auth_password => $admin_password,
+        shared_secret => $metadata_proxy_secret,
+        auth_tenant   => 'admin',
+        auth_user     => 'admin',
+      }
+    }
+  }
+
+  if $pg_compute {
+    # forward all ipv4 traffic
+    # this is required for the vms to pass through the gateways
+    # public interface
+    sysctl::value { 'net.ipv4.ip_forward':
+      value => '1'
+    }
+
+    class { 'libvirt':
+      qemu_config => {
+              cgroup_device_acl => { value => ["/dev/null","/dev/full","/dev/zero",
+              "/dev/random","/dev/urandom","/dev/ptmx",
+              "/dev/kvm","/dev/kqemu",
+              "/dev/rtc","/dev/hpet","/dev/net/tun"] },
+               clear_emulator_capabilities => { value => 0 },
+               user => { value => "root" },
+        },
+    }
+
+    file { "/etc/sudoers.d/ifc_ctl_sudoers":
+      ensure  => file,
+      owner   => root,
+      group   => root,
+      mode    => 0440,
+      content => "nova ALL=(root) NOPASSWD: /opt/pg/bin/ifc_ctl_pp *\n",
+      require => [ Package[$::nova::params::compute_package_name], ],
+    }
   }
 }
