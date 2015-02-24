@@ -50,9 +50,9 @@ class quickstack::neutron::plugins::plumgrid (
 
   nova_config { 'DEFAULT/scheduler_driver': value => 'nova.scheduler.filter_scheduler.FilterScheduler' }
   nova_config { 'DEFAULT/libvirt_vif_type': value => 'ethernet'}
-  nova_config { 'DEFAULT/libvirt_cpu_mode': value => 'none'}
 
   if $pg_controller {
+    nova_config { 'DEFAULT/libvirt_cpu_mode': value => 'none'}
     neutron_config {
       'DEFAULT/service_plugins': ensure => absent,
     }->
