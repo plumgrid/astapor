@@ -67,15 +67,6 @@ class quickstack::neutron::plugins::plumgrid (
      admin_password           => $admin_password,
      controller_priv_host     => $controller_priv_host,
     }
-
-    if $pg_enable_metadata_agent {
-      class { '::neutron::agents::metadata' :
-        auth_password => $admin_password,
-        shared_secret => $metadata_proxy_secret,
-        auth_tenant   => 'admin',
-        auth_user     => 'admin',
-      }
-    }
   }
 
   if $pg_compute {
