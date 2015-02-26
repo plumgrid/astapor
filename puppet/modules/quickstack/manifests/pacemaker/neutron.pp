@@ -218,6 +218,11 @@ class quickstack::pacemaker::neutron (
       resource_type   => 'ocf',
     }
     ->
+    quickstack::pacemaker::resource::generic {'neutron-metadata-agent':
+      clone_opts    => "interleave=true",
+      #monitor_params => { 'start-delay' => '10s' },
+    }
+    ->
     quickstack::pacemaker::constraint::base {
       'neutron-server-metadata-constr' :
       constraint_type => "order",
