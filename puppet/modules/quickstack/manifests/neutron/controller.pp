@@ -400,7 +400,7 @@ class quickstack::neutron::controller (
     if $pg_enable_metadata_agent {
       class { '::neutron::agents::metadata' :
         auth_password => $admin_password,
-        shared_secret => $metadata_proxy_secret,
+        shared_secret => $neutron_metadata_proxy_secret,
         auth_tenant   => 'admin',
         auth_user     => 'admin',
       }
