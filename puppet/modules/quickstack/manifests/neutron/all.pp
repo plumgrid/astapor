@@ -1,17 +1,22 @@
 class quickstack::neutron::all (
+  $allow_overlapping_ips         = true,
   $auth_host                     = 'localhost',
   $auth_tenant                   = 'services',
   $auth_user                     = 'neutron',
+  $dhcp_agents_per_network       = '1',
   $cisco_nexus_plugin            = '',
   $cisco_vswitch_plugin          = '',
   $enable_tunneling              = true,
   $enabled                       = true,
   $external_network_bridge       = '',
   $database_max_retries          = '',
+  $l3_ha                         = false,
   $manage_service                = true,
+  $max_l3_agents_per_router      = 3,
+  $min_l3_agents_per_router      = 2,
   $ml2_type_drivers              = ['local', 'flat', 'vlan', 'gre', 'vxlan'],
   $ml2_tenant_network_types      = ['vxlan', 'vlan', 'gre', 'flat'],
-  $ml2_mechanism_drivers         = ['openvswitch','l2population'],
+  $ml2_mechanism_drivers         = ['openvswitch'],
   $ml2_flat_networks             = ['*'],
   $ml2_network_vlan_ranges       = ['yourphysnet:10:50'],
   $ml2_tunnel_id_ranges          = ['20:100'],
@@ -34,23 +39,28 @@ class quickstack::neutron::all (
                                       quota_port => 'default',
                                       quota_security_group => 'default',
                                       quota_security_group_rule  => 'default',
+                                      quota_vip => 'default',
+                                      quota_pool => 'default',
+                                      quota_router => 'default',
+                                      quota_floatingip => 'default',
                                       network_auto_schedule => 'default',
                                     },
-  $nova_conf_additional_params   = { quota_instances => 'default',
-                                     quota_cores => 'default',
-                                     quota_ram => 'default',
-                                     quota_floating_ips => 'default',
-                                     quota_fixed_ips => 'default',
-                                     quota_driver => 'default',
-                                     },
-  $n1kv_plugin_additional_params = { default_policy_profile => 'default-pp',
-                                     network_node_policy_profile => 'default-pp',
-                                     poll_duration => '10',
-                                     http_pool_size => '4',
-                                     http_timeout => '120',
-                                     firewall_driver => 'neutron.agent.firewall.NoopFirewallDriver',
-                                     enable_sync_on_start => 'True',
-                                     },
+  $nova_conf_additional_params   = {quota_instances => 'default',
+                                    quota_cores => 'default',
+                                    quota_ram => 'default',
+                                    quota_floating_ips => 'default',
+                                    quota_fixed_ips => 'default',
+                                    quota_driver => 'default',
+                                    },
+  $n1kv_plugin_additional_params = {default_policy_profile => 'default-pp',
+                                    network_node_policy_profile => 'default-pp',
+                                    poll_duration => '10',
+                                    http_pool_size => '4',
+                                    http_timeout => '120',
+                                    firewall_driver => 'neutron.agent.firewall.NoopFirewallDriver',
+                                    enable_sync_on_start => 'True',
+                                    restrict_policy_profiles => 'False',
+                                    },
   $n1kv_vsm_ip                   = '0.0.0.0',
   $n1kv_vsm_password             = undef,
   $ovs_bridge_mappings           = [],
@@ -70,6 +80,8 @@ class quickstack::neutron::all (
   $rpc_backend                   = 'neutron.openstack.common.rpc.impl_kombu',
   $security_group_api            = 'neutron',
   $tenant_network_type           = 'vlan',
+  $network_device_mtu            = undef,
+  $veth_mtu                      = undef,
   $verbose                       = 'false',
   $ssl                           = 'false',
 ) {
@@ -85,21 +97,24 @@ class quickstack::neutron::all (
   }
 
   class { '::neutron':
-    allow_overlapping_ips => str2bool_i("$allow_overlapping_ips"),
-    bind_host             => $neutron_priv_host,
-    core_plugin           => $neutron_core_plugin,
-    enabled               => str2bool_i("$enabled"),
-    rpc_backend           => $rpc_backend,
-    qpid_hostname         => $amqp_host,
-    qpid_port             => $real_amqp_port,
-    qpid_protocol         => $qpid_protocol,
-    qpid_username         => $amqp_username,
-    qpid_password         => $amqp_password,
-    rabbit_host           => $amqp_host,
-    rabbit_port           => $real_amqp_port,
-    rabbit_user           => $amqp_username,
-    rabbit_password       => $amqp_password,
-    verbose               => $verbose,
+    allow_overlapping_ips   => str2bool_i("$allow_overlapping_ips"),
+    bind_host               => $neutron_priv_host,
+    core_plugin             => $neutron_core_plugin,
+    dhcp_agents_per_network => $dhcp_agents_per_network,
+    enabled                 => str2bool_i("$enabled"),
+    rpc_backend             => $rpc_backend,
+    qpid_hostname           => $amqp_host,
+    qpid_port               => $real_amqp_port,
+    qpid_protocol           => $qpid_protocol,
+    qpid_username           => $amqp_username,
+    qpid_password           => $amqp_password,
+    rabbit_host             => $amqp_host,
+    rabbit_port             => $real_amqp_port,
+    rabbit_user             => $amqp_username,
+    rabbit_password         => $amqp_password,
+    rabbit_use_ssl          => $ssl,
+    verbose                 => $verbose,
+    network_device_mtu      => $network_device_mtu,
   }
   ->
   # FIXME: This really should be handled by the neutron-puppet module, which has
@@ -115,15 +130,28 @@ class quickstack::neutron::all (
   }
   File['/etc/neutron/plugin.ini'] -> Exec['neutron-db-manage upgrade']
 
+  # short-term workaround for BZ 1181592
+  package{'bind-utils': } ->
+  exec {'neutron-etc-hosts-workaround':
+    command => 'dig A $(hostname) | grep -A1 "ANSWER SEC" | tail -n 1 | awk \'{print $NF " " $1}\' | sed -e \'s/.$//g\' >>/etc/hosts',
+    unless => 'grep -P "\b$( hostname )\b" /etc/hosts',
+    path => ['/usr/bin','/bin'],
+  } -> Service['neutron-server']
+
   class { '::neutron::server':
-    auth_host            => $auth_host,
-    auth_password        => $neutron_user_password,
-    auth_tenant          => $auth_tenant,
-    auth_user            => $auth_user,
-    connection           => $sql_connection,
-    database_max_retries => $database_max_retries,
-    enabled              => str2bool_i("$enabled"),
-    manage_service       => str2bool_i("$manage_service"),
+    auth_host                => $auth_host,
+    auth_password            => $neutron_user_password,
+    auth_tenant              => $auth_tenant,
+    auth_user                => $auth_user,
+    connection               => $sql_connection,
+    database_max_retries     => $database_max_retries,
+    enabled                  => str2bool_i("$enabled"),
+    l3_ha                    => str2bool_i("$l3_ha"),
+    manage_service           => str2bool_i("$manage_service"),
+    max_l3_agents_per_router => $max_l3_agents_per_router,
+    min_l3_agents_per_router => $min_l3_agents_per_router,
+    api_workers              => 0,
+    rpc_workers              => 0,
   }
   contain neutron::server
 
@@ -162,7 +190,6 @@ class quickstack::neutron::all (
       n1kv_vsm_ip                  => $n1kv_vsm_ip,
       n1kv_vsm_password            => $n1kv_vsm_password,
       n1kv_plugin_additional_params => $n1kv_plugin_additional_params,
-      n1kv_os_ha                  => 'true',
       neutron_core_plugin          => $neutron_core_plugin,
       neutron_db_password          => $neutron_db_password,
       neutron_user_password        => $neutron_user_password,
@@ -188,6 +215,7 @@ class quickstack::neutron::all (
       manage_service   => str2bool_i("$manage_service"),
       tunnel_types     => $ovs_tunnel_types,
       vxlan_udp_port   => $ovs_vxlan_udp_port,
+      veth_mtu         => $veth_mtu,
     }
   }
 
@@ -216,6 +244,7 @@ class quickstack::neutron::all (
     manage_service => str2bool_i("$manage_service"),
     metadata_ip    => $neutron_priv_host,
     shared_secret  => $neutron_metadata_proxy_secret,
+    metadata_workers => 0,
   }
 
   neutron_config {
@@ -239,7 +268,7 @@ class quickstack::neutron::all (
   class {'::quickstack::neutron::plugins::neutron_config':
     neutron_conf_additional_params => $neutron_conf_additional_params,
   }
- 
+
   class {'::quickstack::neutron::plugins::nova_config':
     nova_conf_additional_params => $nova_conf_additional_params,
   }
