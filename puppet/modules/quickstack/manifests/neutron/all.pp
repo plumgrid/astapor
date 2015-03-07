@@ -61,8 +61,17 @@ class quickstack::neutron::all (
                                     enable_sync_on_start => 'True',
                                     restrict_policy_profiles => 'False',
                                     },
-  $n1kv_vsm_ip                   = '0.0.0.0',
+  $n1kv_ml2_plugin_additional_params = { default_policy_profile => 'default-pp',
+                                         default_vlan_network_profile => 'default-vlan-np',
+                                         default_vxlan_network_profile => 'default-vxlan-np',
+                                         poll_duration => '60',
+                                         http_pool_size => '4',
+                                         http_timeout => '15',
+                                         restrict_policy_profiles => 'False',
+                                         },
+  $n1kv_vsm_ip                   = undef,
   $n1kv_vsm_password             = undef,
+  $n1kv_vsm_username             = undef,
   $ovs_bridge_mappings           = [],
   $ovs_bridge_uplinks            = [],
   $ovs_tunnel_iface              = '',
@@ -77,6 +86,7 @@ class quickstack::neutron::all (
   $amqp_ssl_port                 = '5671',
   $amqp_username                 = '',
   $amqp_password                 = '',
+  $rabbit_hosts                  = undef,
   $rpc_backend                   = 'neutron.openstack.common.rpc.impl_kombu',
   $security_group_api            = 'neutron',
   $tenant_network_type           = 'vlan',
@@ -96,6 +106,11 @@ class quickstack::neutron::all (
     $sql_connection = "mysql://neutron:${neutron_db_password}@${mysql_host}/neutron"
   }
 
+  if $rabbit_hosts {
+    neutron_config { 'DEFAULT/rabbit_host': ensure => absent }
+    neutron_config { 'DEFAULT/rabbit_port': ensure => absent }
+  }
+
   class { '::neutron':
     allow_overlapping_ips   => str2bool_i("$allow_overlapping_ips"),
     bind_host               => $neutron_priv_host,
@@ -113,22 +128,10 @@ class quickstack::neutron::all (
     rabbit_user             => $amqp_username,
     rabbit_password         => $amqp_password,
     rabbit_use_ssl          => $ssl,
+    rabbit_hosts            => $rabbit_hosts,
     verbose                 => $verbose,
     network_device_mtu      => $network_device_mtu,
   }
-  ->
-  # FIXME: This really should be handled by the neutron-puppet module, which has
-  # a review request open right now: https://review.openstack.org/#/c/50162/
-  # If and when that is merged (or similar), the below can be removed.
-  exec { 'neutron-db-manage upgrade':
-    command     => 'neutron-db-manage --config-file /etc/neutron/neutron.conf --config-file /etc/neutron/plugin.ini upgrade head',
-    path        => '/usr/bin',
-    user        => 'neutron',
-    logoutput   => 'on_failure',
-    before      => Service['neutron-server'],
-    require     => [Neutron_config['database/connection'], Neutron_config['DEFAULT/core_plugin']],
-  }
-  File['/etc/neutron/plugin.ini'] -> Exec['neutron-db-manage upgrade']
 
   # short-term workaround for BZ 1181592
   package{'bind-utils': } ->
@@ -138,6 +141,15 @@ class quickstack::neutron::all (
     path => ['/usr/bin','/bin'],
   } -> Service['neutron-server']
 
+  if ('cisco_n1kv' in $ml2_mechanism_drivers) {
+    neutron_config {
+      'DEFAULT/service_plugins':
+        value => join(['cisco_n1kv_profile','neutron.services.l3_router.l3_router_plugin.L3RouterPlugin'], ','),
+    }
+  }
+
+  anchor {'quickstack-neutron-server-first':}
+  ->
   class { '::neutron::server':
     auth_host                => $auth_host,
     auth_password            => $neutron_user_password,
@@ -150,18 +162,15 @@ class quickstack::neutron::all (
     manage_service           => str2bool_i("$manage_service"),
     max_l3_agents_per_router => $max_l3_agents_per_router,
     min_l3_agents_per_router => $min_l3_agents_per_router,
+    sync_db                  => true,
     api_workers              => 0,
     rpc_workers              => 0,
   }
-  contain neutron::server
+  ->
+  anchor {'quickstack-neutron-server-last':}
 
   if $neutron_core_plugin == 'neutron.plugins.ml2.plugin.Ml2Plugin' {
 
-    neutron_config {
-      'DEFAULT/service_plugins':
-        value => join(['neutron.services.l3_router.l3_router_plugin.L3RouterPlugin',]),
-    }
-    ->
     class { '::neutron::plugins::ml2':
       type_drivers          => $ml2_type_drivers,
       tenant_network_types  => $ml2_tenant_network_types,
@@ -180,10 +189,23 @@ class quickstack::neutron::all (
       class { 'neutron::plugins::ml2::cisco::nexus':
         nexus_config        => $nexus_config,
       }
+    } elsif ('cisco_n1kv' in $ml2_mechanism_drivers) {
+      class { 'quickstack::neutron::plugins::nexus1000v':
+        default_policy_profile               => $n1kv_ml2_plugin_additional_params[default_policy_profile],
+        default_vlan_network_profile         => $n1kv_ml2_plugin_additional_params[default_vlan_network_profile],
+        default_vxlan_network_profile        => $n1kv_ml2_plugin_additional_params[default_vxlan_network_profile],
+        poll_duration                        => $n1kv_ml2_plugin_additional_params[poll_duration],
+        http_pool_size                       => $n1kv_ml2_plugin_additional_params[http_pool_size],
+        http_timeout                         => $n1kv_ml2_plugin_additional_params[http_timeout],
+        n1kv_vsm_ip                          => $n1kv_vsm_ip,
+        n1kv_vsm_password                    => $n1kv_vsm_password,
+        n1kv_vsm_username                    => $n1kv_vsm_username,
+        restrict_policy_profiles             => $n1kv_ml2_plugin_additional_params[restrict_policy_profiles],
+      }
     }
   }
 
-  if $neutron_core_plugin == 'neutron.plugins.cisco.network_plugin.PluginV2' {
+  if ($neutron_core_plugin == "neutron.plugins.cisco.network_plugin.PluginV2") {
     class { 'quickstack::neutron::plugins::cisco':
       cisco_vswitch_plugin         => $cisco_vswitch_plugin,
       cisco_nexus_plugin           => $cisco_nexus_plugin,
@@ -203,14 +225,21 @@ class quickstack::neutron::all (
       tenant_network_type          => $tenant_network_type,
     }
   } else {
-    $local_ip = find_ip("$ovs_tunnel_network",
+    if ('cisco_n1kv' in $ml2_mechanism_drivers) {
+      $_enable_tunneling  = false
+      $local_ip = false
+    } else {
+      $_enable_tunneling  = str2bool_i("$enable_tunneling")
+      $local_ip = find_ip("$ovs_tunnel_network",
                       ["$ovs_tunnel_iface","$external_network_bridge"],
                       "")
+    }
+
     class { '::neutron::agents::ovs':
       bridge_mappings  => $ovs_bridge_mappings,
       bridge_uplinks   => $ovs_bridge_uplinks,
       enabled          => str2bool_i("$enabled"),
-      enable_tunneling => str2bool_i("$enable_tunneling"),
+      enable_tunneling => $_enable_tunneling,
       local_ip         => $local_ip,
       manage_service   => str2bool_i("$manage_service"),
       tunnel_types     => $ovs_tunnel_types,
