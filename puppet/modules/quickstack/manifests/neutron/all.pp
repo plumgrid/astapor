@@ -226,7 +226,7 @@ class quickstack::neutron::all (
       provider_vlan_auto_trunk     => $provider_vlan_auto_trunk,
       tenant_network_type          => $tenant_network_type,
     }
-  } else {
+  } elsif ($neutron_core_plugin != "neutron.plugins.plumgrid.plumgrid_plugin.plumgrid_plugin.NeutronPluginPLUMgridV2") {
     if ('cisco_n1kv' in $ml2_mechanism_drivers) {
       $_enable_tunneling  = false
       $local_ip = false
@@ -257,6 +257,8 @@ class quickstack::neutron::all (
     security_group_api     => $security_group_api,
   }
 
+  if ($neutron_core_plugin != "neutron.plugins.plumgrid.plumgrid_plugin.plumgrid_plugin.NeutronPluginPLUMgridV2") {
+
   class { '::neutron::agents::dhcp':
     enabled        => str2bool_i("$enabled"),
     manage_service => str2bool_i("$manage_service"),
@@ -266,6 +268,8 @@ class quickstack::neutron::all (
     enabled                 => str2bool_i("$enabled"),
     external_network_bridge => $external_network_bridge,
     manage_service          => str2bool_i("$manage_service"),
+  }
+
   }
 
   class { 'neutron::agents::metadata':
