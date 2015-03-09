@@ -165,6 +165,8 @@ class quickstack::neutron::all (
     sync_db                  => true,
     api_workers              => 0,
     rpc_workers              => 0,
+    database_max_pool_size   => 30,
+    database_max_overflow    => 40,
   }
   ->
   anchor {'quickstack-neutron-server-last':}
