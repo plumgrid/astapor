@@ -11,7 +11,7 @@ class quickstack::neutron::plugins::plumgrid (
   $pg_password                   = undef,
   $pg_servertimeout              = '99',
   $pg_enable_metadata_agent      = false,
-  $admin_password                = $quickstack::pacemaker::params::keystone_user_password,
+  $admin_password                = $quickstack::pacemaker::keystone::admin_password,
   $pg_fw_src                     = undef,
   $pg_fw_dest                    = undef,
   $controller_priv_host          = $quickstack::pacemaker::params::keystone_admin_vip,
