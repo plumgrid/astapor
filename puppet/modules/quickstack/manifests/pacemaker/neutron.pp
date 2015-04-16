@@ -6,7 +6,8 @@ class quickstack::pacemaker::neutron (
   $enable_tunneling           = false,
   $enabled                    = true,
   $external_network_bridge    = '',
-  $l3_ha                      = false,
+  $enable_vif_type_n1kv       = false,
+  $l3_ha                      = true,
   $ml2_type_drivers           = ['local', 'flat', 'vlan', 'gre', 'vxlan'],
   $ml2_tenant_network_types   = ['vxlan', 'vlan', 'gre', 'flat'],
   $ml2_mechanism_drivers      = ['openvswitch','l2population'],
@@ -44,14 +45,14 @@ class quickstack::pacemaker::neutron (
                                     enable_sync_on_start => 'True',
                                     restrict_policy_profiles => 'False',
                                     },
-  $n1kv_ml2_plugin_additional_params = { default_policy_profile => 'default-pp',
-                                         default_vlan_network_profile => 'default-vlan-np',
-                                         default_vxlan_network_profile => 'default-vxlan-np',
-                                         poll_duration => '60',
-                                         http_pool_size => '4',
-                                         http_timeout => '15',
-                                         restrict_policy_profiles => 'False',
-                                         },
+  $n1kv_ml2_plugin_additional_params = {default_policy_profile => 'default-pp',
+                                        default_vlan_network_profile => 'default-vlan-np',
+                                        default_vxlan_network_profile => 'default-vxlan-np',
+                                        poll_duration => '60',
+                                        http_pool_size => '4',
+                                        http_timeout => '15',
+                                        restrict_policy_profiles => 'False',
+                                        },
   $n1kv_vsm_ip                = undef,
   $n1kv_vsm_password          = undef,
   $n1kv_vsm_username          = undef,
@@ -82,6 +83,19 @@ class quickstack::pacemaker::neutron (
     if ($::pcs_setup_neutron ==  undef or
         !str2bool_i("$::pcs_setup_neutron")) {
       $_enabled = true
+
+      # this only happens on the first puppet run on the node that is
+      # the vip.  we need neutron-server to start up on only one node
+      # the first time around so as not to run into a db race
+      # condition.
+      Exec['i-am-neutron-vip-OR-neutron-is-up-on-vip'] ->
+      Exec['neutron-db-sync'] ->
+      exec{"start-and-stop-neutron-server-on-vip":
+        command   => "/usr/sbin/service neutron-server start && \
+                      /usr/sbin/service neutron-server stop",
+        onlyif    => "/tmp/ha-all-in-one-util.bash i_am_vip $neutron_public_vip",
+      } ->
+      Exec['pcs-neutron-server-set-up']
     } else {
       $_enabled = false
     }
@@ -153,10 +167,11 @@ class quickstack::pacemaker::neutron (
       cisco_vswitch_plugin               => $cisco_vswitch_plugin,
       cisco_nexus_plugin                 => $cisco_nexus_plugin,
       enable_tunneling                   => $enable_tunneling,
-      enabled                            => $_enabled,
+      enabled                            => false,
       external_network_bridge            => $external_network_bridge,
+      enable_vif_type_n1kv               => $enable_vif_type_n1kv,
       l3_ha                              => $l3_ha,
-      manage_service                     => $_enabled,
+      manage_service                     => false,
       max_l3_agents_per_router           => $_max_l3_agents_per_router,
       min_l3_agents_per_router           => $_min_l3_agents_per_router,
       ml2_type_drivers                   => $ml2_type_drivers,
@@ -247,4 +262,3 @@ class quickstack::pacemaker::neutron (
     Anchor['pacemaker ordering constraints begin']
   }
 }
-
