@@ -147,6 +147,11 @@ class quickstack::neutron::all (
       'DEFAULT/service_plugins':
         value => join(['cisco_n1kv_profile','neutron.services.l3_router.l3_router_plugin.L3RouterPlugin'], ','),
     }
+  } elsif ($neutron_core_plugin != "neutron.plugins.plumgrid.plumgrid_plugin.plumgrid_plugin.NeutronPluginPLUMgridV2") {
+    neutron_config {
+      'DEFAULT/service_plugins':
+        value => join(['neutron.services.l3_router.l3_router_plugin.L3RouterPlugin',]),
+    }
   }
 
   anchor {'quickstack-neutron-server-first':}
@@ -238,6 +243,13 @@ class quickstack::neutron::all (
                       ["$ovs_tunnel_iface","$external_network_bridge"],
                       "")
     }
+
+    if str2bool_i("$l3_ha") {
+      $_ovs_l2_population = 'False'
+    } else {
+      $_ovs_l2_population = 'True'
+    }
+    neutron_plugin_ovs {'AGENT/l2_population': value => "$_ovs_l2_population"; }
 
     class { '::neutron::agents::ovs':
       bridge_mappings  => $ovs_bridge_mappings,
