@@ -292,8 +292,6 @@ class quickstack::neutron::all (
     interface_driver        => $_interface_driver,
   }
 
-  }
-
   class { 'neutron::agents::metadata':
     auth_password  => $neutron_user_password,
     auth_url       => "http://${auth_host}:35357/v2.0",
@@ -302,6 +300,8 @@ class quickstack::neutron::all (
     metadata_ip    => $neutron_priv_host,
     shared_secret  => $neutron_metadata_proxy_secret,
     metadata_workers => 0,
+  }
+
   }
 
   include quickstack::neutron::notifications

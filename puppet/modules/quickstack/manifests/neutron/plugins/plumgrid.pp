@@ -15,6 +15,9 @@ class quickstack::neutron::plugins::plumgrid (
   $pg_fw_src                     = undef,
   $pg_fw_dest                    = undef,
   $controller_priv_host          = $quickstack::pacemaker::params::keystone_admin_vip,
+  $nova_metadata_ip              = $quickstack::pacemaker::params::local_bind_addr,
+  $nova_metadata_port            = '8775',
+  $metadata_proxy_shared_secret  = $quickstack::pacemaker::params::neutron_metadata_proxy_secret,
 ) inherits quickstack::params {
 
   if $pg_fw_src != undef {
@@ -57,15 +60,18 @@ class quickstack::neutron::plugins::plumgrid (
       'DEFAULT/service_plugins': ensure => absent,
     }->
     class { '::neutron::plugins::plumgrid':
-     pg_connection            => $pg_connection,
-     pg_director_server       => $pg_director_server,
-     pg_director_server_port  => $pg_director_server_port,
-     pg_username              => $pg_username,
-     pg_password              => $pg_password,
-     pg_servertimeout         => $pg_servertimeout,
-     pg_enable_metadata_agent => $pg_enable_metadata_agent,
-     admin_password           => $admin_password,
-     controller_priv_host     => $controller_priv_host,
+     pg_connection                => $pg_connection,
+     pg_director_server           => $pg_director_server,
+     pg_director_server_port      => $pg_director_server_port,
+     pg_username                  => $pg_username,
+     pg_password                  => $pg_password,
+     pg_servertimeout             => $pg_servertimeout,
+     pg_enable_metadata_agent     => $pg_enable_metadata_agent,
+     admin_password               => $admin_password,
+     controller_priv_host         => $controller_priv_host,
+     nova_metadata_ip             => $nova_metadata_ip,
+     nova_metadata_port           => $nova_metadata_port,
+     metadata_proxy_shared_secret => $metadata_proxy_shared_secret,
     }
   }
 
@@ -75,6 +81,19 @@ class quickstack::neutron::plugins::plumgrid (
     # public interface
     sysctl::value { 'net.ipv4.ip_forward':
       value => '1'
+    }
+
+    # Install the nova-api
+    nova::generic_service { 'api':
+      enabled      => true,
+      package_name => $::nova::params::api_package_name,
+      service_name => $::nova::params::api_service_name,
+    }
+
+    nova_config {
+      'neutron/service_metadata_proxy': value => true;
+      'neutron/metadata_proxy_shared_secret':
+        value => $metadata_proxy_shared_secret;
     }
 
     class { 'libvirt':
