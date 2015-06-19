@@ -239,25 +239,8 @@ class quickstack::pacemaker::neutron (
     }
 
     if ($core_plugin == "neutron.plugins.plumgrid.plumgrid_plugin.plumgrid_plugin.NeutronPluginPLUMgridV2") {
-      quickstack::pacemaker::resource::generic {'neutron-metadata-agent':
-        clone_opts => "interleave=true",
-        require    => Quickstack::Pacemaker::Resource::Generic['neutron-server'],
-      }
-      ->
-      quickstack::pacemaker::constraint::base {
-        'neutron-server-metadata-constr' :
-        constraint_type => "order",
-        first_resource  => "neutron-server-clone",
-        second_resource => "neutron-metadata-agent-clone",
-        first_action    => "start",
-        second_action   => "start",
-      }
-      ->
-      quickstack::pacemaker::constraint::colocation {
-        'neutron-scale-metadata-colo' :
-        source => "neutron-metadata-agent-clone",
-        target => "neutron-server-clone",
-        score  => "INFINITY",
+      notify { 'neutron-server resource end':
+        require => Quickstack::Pacemaker::Resource::Generic['neutron-server'],
       }
       ->
       Anchor['pacemaker ordering constraints begin']
