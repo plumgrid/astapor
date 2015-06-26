@@ -28,8 +28,6 @@ class quickstack::neutron::compute (
   $neutron_host                 = '127.0.0.1',
   $neutron_metadata_proxy_secret = $quickstack::params::neutron_metadata_proxy_secret,
   $enable_plumgrid              = 'false',
-  $pg_fw_src                    = $quickstack::params::pg_fw_src,
-  $pg_fw_dest                   = $quickstack::params::pg_fw_dest,
   $nova_db_password             = $quickstack::params::nova_db_password,
   $nova_user_password           = $quickstack::params::nova_user_password,
   $ovs_bridge_mappings          = $quickstack::params::ovs_bridge_mappings,
@@ -143,37 +141,6 @@ class quickstack::neutron::compute (
     nova::generic_service { 'network.filters':
       package_name   => $::nova::params::network_package_name,
       service_name   => $::nova::params::network_service_name,
-    }
-
-    if $pg_fw_src != undef {
-      firewall { '001 plumgrid udp':
-        proto       => 'udp',
-        action      => 'accept',
-        state       => ['NEW'],
-        destination => $pg_fw_dest,
-        source      => $pg_fw_src,
-        before      => Service['plumgrid'],
-      }
-      firewall { '001 plumgrid rpc':
-        proto       => 'tcp',
-        action      => 'accept',
-        state       => ['NEW'],
-        destination => $pg_fw_dest,
-        source      => $pg_fw_src,
-        before      => Service['plumgrid'],
-      }
-      firewall { '040 allow vrrp':
-        proto       => 'vrrp',
-        action      => 'accept',
-        before      => Service['plumgrid'],
-      }
-      firewall { '040 keepalived':
-        proto       => 'all',
-        action      => 'accept',
-        destination => '224.0.0.0/24',
-        source      => $pg_fw_src,
-        before      => Service['plumgrid'],
-      }
     }
 
     class { 'libvirt':
