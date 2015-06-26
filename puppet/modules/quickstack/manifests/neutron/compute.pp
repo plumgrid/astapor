@@ -108,6 +108,12 @@ class quickstack::neutron::compute (
 
     include nova::params
 
+    firewall { '001 nova metadata incoming':
+      proto  => 'tcp',
+      dport  => ['8775'],
+      action => 'accept',
+    }
+
     # Install the nova-api
     nova::generic_service { 'api':
       enabled      => true,
@@ -120,7 +126,6 @@ class quickstack::neutron::compute (
       'neutron/metadata_proxy_shared_secret':
         value => $neutron_metadata_proxy_secret;
     }
-
 
     nova_config { 'DEFAULT/scheduler_driver': value => 'nova.scheduler.filter_scheduler.FilterScheduler' }
     nova_config { 'DEFAULT/libvirt_vif_type': value => 'ethernet'}
