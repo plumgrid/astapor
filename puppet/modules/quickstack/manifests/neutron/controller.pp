@@ -56,8 +56,6 @@ class quickstack::neutron::controller (
   $pg_password                   = $quickstack::params::pg_password,
   $pg_servertimeout              = $quickstack::params::pg_servertimeout,
   $pg_enable_metadata_agent      = false,
-  $pg_fw_src                     = $quickstack::params::pg_fw_src,
-  $pg_fw_dest                    = $quickstack::params::pg_fw_dest,
   $controller_priv_host          = $quickstack::params::controller_priv_host,
   $controller_pub_host           = $quickstack::params::controller_pub_host,
   $glance_db_password            = $quickstack::params::glance_db_password,
@@ -403,37 +401,6 @@ class quickstack::neutron::controller (
         shared_secret => $neutron_metadata_proxy_secret,
         auth_tenant   => 'admin',
         auth_user     => 'admin',
-      }
-    }
-
-    if $pg_fw_src != undef {
-      firewall { '001 plumgrid udp':
-        proto       => 'udp',
-        action      => 'accept',
-        state       => ['NEW'],
-        destination => $pg_fw_dest,
-        source      => $pg_fw_src,
-        before      => Class['::neutron::plugins::plumgrid'],
-      }
-      firewall { '001 plumgrid rpc':
-        proto       => 'tcp',
-        action      => 'accept',
-        state       => ['NEW'],
-        destination => $pg_fw_dest,
-        source      => $pg_fw_src,
-        before      => Class['::neutron::plugins::plumgrid'],
-      }
-      firewall { '040 allow vrrp':
-        proto       => 'vrrp',
-        action      => 'accept',
-        before      => Class['::neutron::plugins::plumgrid'],
-      }
-      firewall { '040 keepalived':
-        proto       => 'all',
-        action      => 'accept',
-        destination => '224.0.0.18/32',
-        source      => $pg_fw_src,
-        before      => Class['::neutron::plugins::plumgrid'],
       }
     }
   }

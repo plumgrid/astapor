@@ -12,44 +12,11 @@ class quickstack::neutron::plugins::plumgrid (
   $pg_servertimeout              = '99',
   $pg_enable_metadata_agent      = false,
   $admin_password                = $quickstack::pacemaker::keystone::admin_password,
-  $pg_fw_src                     = undef,
-  $pg_fw_dest                    = undef,
   $controller_priv_host          = $quickstack::pacemaker::params::keystone_admin_vip,
   $nova_metadata_ip              = $quickstack::pacemaker::params::local_bind_addr,
   $nova_metadata_port            = '8775',
   $metadata_proxy_shared_secret  = $quickstack::pacemaker::params::neutron_metadata_proxy_secret,
 ) inherits quickstack::params {
-
-  if $pg_fw_src != undef {
-    firewall { '001 plumgrid udp':
-      proto       => 'udp',
-      action      => 'accept',
-      state       => ['NEW'],
-      destination => $pg_fw_dest,
-      source      => $pg_fw_src,
-      before      => Service['plumgrid'],
-    }
-    firewall { '001 plumgrid rpc':
-      proto       => 'tcp',
-      action      => 'accept',
-      state       => ['NEW'],
-      destination => $pg_fw_dest,
-      source      => $pg_fw_src,
-      before      => Service['plumgrid'],
-    }
-    firewall { '040 allow vrrp': 
-      proto       => 'vrrp', 
-      action      => 'accept',
-      before      => Service['plumgrid'],
-    }
-    firewall { '040 keepalived':
-      proto       => 'all',
-      action      => 'accept',
-      destination => '224.0.0.18/32',
-      source      => $pg_fw_src,
-      before      => Service['plumgrid'],
-    }
-  }
 
   nova_config { 'DEFAULT/scheduler_driver': value => 'nova.scheduler.filter_scheduler.FilterScheduler' }
   nova_config { 'DEFAULT/libvirt_vif_type': value => 'ethernet'}
