@@ -50,18 +50,14 @@ class quickstack::neutron::plugins::plumgrid (
       value => '1'
     }
 
-    # Install the nova-api
-    nova::generic_service { 'api':
-      enabled      => true,
-      package_name => $::nova::params::api_package_name,
-      service_name => $::nova::params::api_service_name,
+    class { '::nova::api':
+      enabled                              => true,
+      admin_password                       => $quickstack::neutron::compute::nova_user_password,
+      auth_host                            => $quickstack::neutron::compute::nova_host,
+      neutron_metadata_proxy_shared_secret => $metadata_proxy_shared_secret,
     }
 
-    nova_config {
-      'neutron/service_metadata_proxy': value => true;
-      'neutron/metadata_proxy_shared_secret':
-        value => $metadata_proxy_shared_secret;
-    }
+    class {'::quickstack::firewall::nova':}
 
     class { 'libvirt':
       qemu_config => {
