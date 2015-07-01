@@ -26,7 +26,6 @@ class quickstack::neutron::compute (
   $neutron_db_password          = $quickstack::params::neutron_db_password,
   $neutron_user_password        = $quickstack::params::neutron_user_password,
   $neutron_host                 = '127.0.0.1',
-  $neutron_metadata_proxy_secret = $quickstack::params::neutron_metadata_proxy_secret,
   $enable_plumgrid              = 'false',
   $nova_db_password             = $quickstack::params::nova_db_password,
   $nova_user_password           = $quickstack::params::nova_user_password,
@@ -108,23 +107,11 @@ class quickstack::neutron::compute (
 
     include nova::params
 
-    firewall { '001 nova metadata incoming':
-      proto  => 'tcp',
-      dport  => ['8775'],
-      action => 'accept',
-    }
-
-    # Install the nova-api
-    nova::generic_service { 'api':
-      enabled      => true,
-      package_name => $::nova::params::api_package_name,
-      service_name => $::nova::params::api_service_name,
-    }
-
-    nova_config {
-      'neutron/service_metadata_proxy': value => true;
-      'neutron/metadata_proxy_shared_secret':
-        value => $neutron_metadata_proxy_secret;
+    class { 'nova::api':
+      admin_password    => $nova_user_password,
+      enabled           => true,
+      auth_host         => $controller_priv_host,
+      admin_tenant_name => $nova_admin_tenant_name
     }
 
     nova_config { 'DEFAULT/scheduler_driver': value => 'nova.scheduler.filter_scheduler.FilterScheduler' }
