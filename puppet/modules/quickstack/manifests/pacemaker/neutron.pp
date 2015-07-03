@@ -237,23 +237,26 @@ class quickstack::pacemaker::neutron (
       operation_opts   => "start timeout=90",
       # monitor_params => { 'start-delay'     => '10s' },
     }
+    ->
+    # NOTE: ocf resources in current version of pcs do not accept arguements
+    # with --clone, so for now pass them as resource params.
+    quickstack::pacemaker::resource::generic {'neutron-scale':
+      resource_name   => 'neutron:NeutronScale',
+      resource_params => "clone globally-unique=true clone-max=${_clone_max} interleave=true",
+      resource_type   => 'ocf',
+      require         => Quickstack::Pacemaker::Resource::Generic['neutron-server'],
+    }
 
     if ($core_plugin == "neutron.plugins.plumgrid.plumgrid_plugin.plumgrid_plugin.NeutronPluginPLUMgridV2") {
-      notify { 'neutron-server resource end':
-        require => Quickstack::Pacemaker::Resource::Generic['neutron-server'],
+      notify { 'PLUMgrid neutron-scale resource ':
+        require => Quickstack::Pacemaker::Resource::Generic['neutron-scale'],
       }
       ->
       Anchor['pacemaker ordering constraints begin']
 
     } else {
-
-      # NOTE: ocf resources in current version of pcs do not accept arguements
-      # with --clone, so for now pass them as resource params.
-      quickstack::pacemaker::resource::generic {'neutron-scale':
-        resource_name   => 'neutron:NeutronScale',
-        resource_params => "clone globally-unique=true clone-max=${_clone_max} interleave=true",
-        resource_type   => 'ocf',
-        require         => Quickstack::Pacemaker::Resource::Generic['neutron-server'],
+      notify { 'neutron-scale resource ':
+        require => Quickstack::Pacemaker::Resource::Generic['neutron-scale'],
       }
       ->
       quickstack::pacemaker::resource::generic {'neutron-ovs-cleanup':
