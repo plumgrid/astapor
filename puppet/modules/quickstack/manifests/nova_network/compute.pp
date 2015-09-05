@@ -5,18 +5,27 @@ class quickstack::nova_network::compute (
   $ceilometer                   = 'true',
   $ceilometer_metering_secret   = $quickstack::params::ceilometer_metering_secret,
   $ceilometer_user_password     = $quickstack::params::ceilometer_user_password,
+  $manage_ceph_conf             = true,
   $ceph_cluster_network         = '',
   $ceph_public_network          = '',
   $ceph_fsid                    = '',
   $ceph_images_key              = '',
   $ceph_volumes_key             = '',
+  $ceph_rgw_key                 = '',
   $ceph_mon_host                = [ ],
   $ceph_mon_initial_members     = [ ],
-  $ceph_osd_pool_default_size   = '',
+  $ceph_conf_include_osd_global = true,
+  $ceph_osd_pool_size           = '',
   $ceph_osd_journal_size        = '',
+  $ceph_osd_mkfs_options_xfs    = '-f -i size=2048 -n size=64k',
+  $ceph_osd_mount_options_xfs   = 'inode64,noatime,logbsize=256k',
+  $ceph_conf_include_rgw        = false,
+  $ceph_rgw_hostnames           = [ ],
+  $ceph_extra_conf_lines        = [ ],
   $cinder_backend_gluster       = $quickstack::params::cinder_backend_gluster,
   $cinder_backend_nfs           = 'false',
   $cinder_backend_rbd           = 'false',
+  $cinder_catalog_info          = 'volume:cinder:internalURL',
   $glance_backend_rbd           = 'false',
   $glance_host                  = '127.0.0.1',
   $nova_host                    = '127.0.0.1',
@@ -42,6 +51,8 @@ class quickstack::nova_network::compute (
   $amqp_ssl_port                = '5671',
   $amqp_username                = $quickstack::params::amqp_username,
   $amqp_password                = $quickstack::params::amqp_password,
+  $rabbit_hosts                 = [ ],
+  $rabbitmq_use_addrs_not_vip   = true,
   $verbose                      = $quickstack::params::verbose,
   $ssl                          = $quickstack::params::ssl,
   $mysql_ca                     = $quickstack::params::mysql_ca,
@@ -55,7 +66,9 @@ class quickstack::nova_network::compute (
   $private_iface                = '',
   $private_ip                   = '',
   $private_network              = '',
-
+  $network_device_mtu           = undef,
+  $vnc_keymap                   = 'en-us',
+  $vncproxy_host                = undef,
 ) inherits quickstack::params {
 
   # Configure Nova
@@ -75,6 +88,16 @@ class quickstack::nova_network::compute (
 
   $priv_nic = find_nic("$network_private_network","$network_private_iface","")
   $pub_nic = find_nic("$network_public_network","$network_public_iface","")
+
+  # empty array is true in puppet, so deal with that case the long
+  # way.  the var $rabbitmq_use_addrs_not_vip provided for consistency
+  # with the HA controller.
+  if $rabbit_hosts == [ ]  or ! str2bool_i($rabbitmq_use_addrs_not_vip) {
+    $_rabbit_hosts = undef
+  } else {
+    $_rabbit_hosts = split(inline_template('<%= @rabbit_hosts.map {
+      |x| x+":"+@amqp_port }.join(",")%>'),",")
+  }
 
   class { '::nova::network':
     private_interface => "$priv_nic",
@@ -96,23 +119,33 @@ class quickstack::nova_network::compute (
     ceilometer                   => $ceilometer,
     ceilometer_metering_secret   => $ceilometer_metering_secret,
     ceilometer_user_password     => $ceilometer_user_password,
+    manage_ceph_conf             => $manage_ceph_conf,
     ceph_cluster_network         => $ceph_cluster_network,
     ceph_public_network          => $ceph_public_network,
     ceph_fsid                    => $ceph_fsid,
     ceph_images_key              => $ceph_images_key,
     ceph_volumes_key             => $ceph_volumes_key,
+    ceph_rgw_key                 => $ceph_rgw_key,
     ceph_mon_host                => $ceph_mon_host,
     ceph_mon_initial_members     => $ceph_mon_initial_members,
-    ceph_osd_pool_default_size   => $ceph_osd_pool_default_size,
+    ceph_conf_include_osd_global => $ceph_conf_include_osd_global,
+    ceph_osd_pool_size           => $ceph_osd_pool_size,
     ceph_osd_journal_size        => $ceph_osd_journal_size,
+    ceph_osd_mkfs_options_xfs    => $ceph_osd_mkfs_options_xfs,
+    ceph_osd_mount_options_xfs   => $ceph_osd_mount_options_xfs,
+    ceph_conf_include_rgw        => $ceph_conf_include_rgw,
+    ceph_rgw_hostnames           => $ceph_rgw_hostnames,
+    ceph_extra_conf_lines        => $ceph_extra_conf_lines,
     cinder_backend_gluster       => $cinder_backend_gluster,
     cinder_backend_nfs           => $cinder_backend_nfs,
     cinder_backend_rbd           => $cinder_backend_rbd,
+    cinder_catalog_info          => $cinder_catalog_info,
     glance_backend_rbd           => $glance_backend_rbd,
     glance_host                  => $glance_host,
     mysql_host                   => $mysql_host,
     nova_db_password             => $nova_db_password,
     nova_host                    => $nova_host,
+    vncproxy_host                => pick($vncproxy_host, $nova_host),
     nova_user_password           => $nova_user_password,
     amqp_provider                => $amqp_provider,
     amqp_host                    => $amqp_host,
@@ -120,6 +153,7 @@ class quickstack::nova_network::compute (
     amqp_ssl_port                => $amqp_ssl_port,
     amqp_username                => $amqp_username,
     amqp_password                => $amqp_password,
+    rabbit_hosts                 => $_rabbit_hosts,
     verbose                      => $verbose,
     ssl                          => $ssl,
     mysql_ca                     => $mysql_ca,
@@ -133,5 +167,7 @@ class quickstack::nova_network::compute (
     private_iface                => $private_iface,
     private_ip                   => $private_ip,
     private_network              => $private_network,
+    network_device_mtu           => $network_device_mtu,
+    vnc_keymap                   => $vnc_keymap,
   }
 }

@@ -1,5 +1,6 @@
 class quickstack::params (
-  # This class needs to go away.
+  $scenarii = [],
+  $scenario = '',
 
   # Logs
   $admin_email                = "admin@${::domain}",
@@ -38,6 +39,7 @@ class quickstack::params (
   $cinder_backend_nfs_name      = 'nfs',
   $cinder_backend_eqlx          = false,
   $cinder_backend_eqlx_name     = ['eqlx'],
+  $cinder_backend_netapp        = false,
   $cinder_multiple_backends     = false,
   $cinder_backend_rbd           = false,
   $cinder_backend_rbd_name      = 'rbd',
@@ -54,12 +56,29 @@ class quickstack::params (
   $cinder_san_ip                = ['192.168.124.11'],
   $cinder_san_login             = ['grpadmin'],
   $cinder_san_password          = ['CHANGEME'],
-  $cinder_san_thin_provision    = [false],
+  $cinder_san_thin_provision    = [true],
   $cinder_eqlx_group_name       = ['group-0'],
   $cinder_eqlx_pool             = ['default'],
   $cinder_eqlx_use_chap         = [false],
   $cinder_eqlx_chap_login       = ['chapadmin'],
   $cinder_eqlx_chap_password    = ['CHANGEME'],
+  #  Cinder NetApp
+  $cinder_netapp_hostname          = ['netapp1.example.com'],
+  $cinder_netapp_login             = ['admin'],
+  $cinder_netapp_password          = ['CHANGEME'],
+  $cinder_netapp_server_port       = ['80'],
+  $cinder_netapp_storage_family    = ['ontap_cluster'],
+  $cinder_netapp_transport_type    = ['http'],
+  $cinder_netapp_storage_protocol  = ['nfs'],
+  $cinder_netapp_nfs_shares        = ['192.168.1.4:/cinder'],
+  $cinder_netapp_nfs_shares_config = ['/etc/cinder/shares.conf'],
+  $cinder_netapp_volume_list       = ['cindervol1'],
+  $cinder_netapp_vfiler            = ['cinder'],
+  $cinder_netapp_vserver           = ['cinder'],
+  $cinder_netapp_controller_ips    = ['192.168.1.3'],
+  $cinder_netapp_sa_password       = ['CHANGEME'],
+  $cinder_netapp_storage_pools     = ['pool1'],
+  $cinder_backend_netapp_name      = produce_array_with_prefix("netapp", 1, size($cinder_netapp_hostname)),
   #  Cinder RBD
   $cinder_rbd_pool              = 'volumes',
   $cinder_rbd_ceph_conf         = '/etc/ceph/ceph.conf',
@@ -116,6 +135,8 @@ class quickstack::params (
   $enable_tunneling              = 'True',
   $ovs_vxlan_udp_port            = '4789',
   $ovs_tunnel_types              = [],
+  $network_device_mtu            = undef,
+  $veth_mtu                      = undef,
 
   # neutron plugin config
   $neutron_core_plugin           = 'neutron.plugins.ml2.plugin.Ml2Plugin',
@@ -151,6 +172,10 @@ class quickstack::params (
                                      'quota_port' => 'default',
                                      'quota_security_group' => 'default',
                                      'quota_security_group_rule' => 'default',
+                                     'quota_vip' => 'default',
+                                     'quota_pool' => 'default',
+                                     'quota_router' => 'default',
+                                     'quota_floatingip' => 'default',
                                      'network_auto_schedule' => 'default',
                                    },
   $nova_conf_additional_params   = { 'quota_instances' => 'default',
@@ -167,6 +192,7 @@ class quickstack::params (
                                      'http_timeout' => '30',
                                      'firewall_driver' => 'neutron.agent.firewall.NoopFirewallDriver',
                                      'enable_sync_on_start' => 'True',
+                                     'restrict_policy_profiles' => 'False',
                                      },
   $security_group_api            = 'neutron',
   # Horizon

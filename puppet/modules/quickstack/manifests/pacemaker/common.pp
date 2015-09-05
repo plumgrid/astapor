@@ -6,8 +6,6 @@
 #
 # [*pacemaker_cluster_name*]
 #   The name of your openstack cluster
-# [*pacemaker_cluster_members*]
-#   An array of IPs for the nodes in your cluster
 # [*fencing_type*]
 #   Should be either "disabled", "fence_xvm", "ipmilan", or "". ""
 #   means do not disable stonith, but also don't add any fencing
@@ -29,8 +27,8 @@
 #
 
 class quickstack::pacemaker::common (
+  $hacluster_pwd,
   $pacemaker_cluster_name         = "openstack",
-  $pacemaker_cluster_members      = "192.168.200.10 192.168.200.11 192.168.200.12",
   $fencing_type                   = "disabled",
   $fence_ipmilan_address          = "",
   $fence_ipmilan_username         = "",
@@ -39,7 +37,8 @@ class quickstack::pacemaker::common (
   $fence_ipmilan_hostlist         = "",
   $fence_ipmilan_host_to_address  = [],
   $fence_ipmilan_expose_lanplus   = "true",
-  $fence_ipmilan_lanplus_options  = "",
+  $fence_ipmilan_lanplus_options  = "1",
+  $fence_ipmilan_resource_params  = "cipher=1",
   $fence_xvm_port                 = "",
   $fence_xvm_manage_key_file      = "false",
   $fence_xvm_key_file_password    = "",
@@ -52,14 +51,41 @@ class quickstack::pacemaker::common (
     $setup_cluster = false
   }
 
+  if !$hacluster_pwd {
+    fail("A password for the cluster must be set")
+  }
+
+  $pacemaker_members = join(map_params("pcmk_server_names")," ")
+
+  $num_hosts_idx = size(map_params("lb_backend_server_names"))-1
+  quickstack::pacemaker::hosts{ "lb $num_hosts_idx":
+    index            => $num_hosts_idx,
+    ip_address_array => map_params("lb_backend_server_addrs"),
+    hostname_array   => map_params("lb_backend_server_names"),
+  }
+  -> Package['rpcbind']
+
+  if (map_params("pcmk_server_names") != map_params("lb_backend_server_names")) {
+    $clu_num_hosts_idx = size(map_params("pcmk_server_names"))-1
+    quickstack::pacemaker::hosts{ "clu $clu_num_hosts_idx":
+      index            => $clu_num_hosts_idx,
+      ip_address_array => map_params("pcmk_server_addrs"),
+      hostname_array   => map_params("pcmk_server_names"),
+    }
+    -> Package['rpcbind']
+  }
+
   package {'rpcbind': } ->
   service {'rpcbind':
     enable => true,
     ensure => 'running',
   } ->
-  class {'pacemaker::corosync':
+  class {'::pacemaker':
+    hacluster_pwd => $hacluster_pwd,
+  } ->
+  class {'::pacemaker::corosync':
     cluster_name    => $pacemaker_cluster_name,
-    cluster_members => $pacemaker_cluster_members,
+    cluster_members => $pacemaker_members,
     setup_cluster   => $setup_cluster,
   }
 
@@ -84,6 +110,7 @@ class quickstack::pacemaker::common (
       host_to_address => $fence_ipmilan_host_to_address,
       lanplus         => str2bool_i("$fence_ipmilan_expose_lanplus"),
       lanplus_options => $fence_ipmilan_lanplus_options,
+      resource_params => $fence_ipmilan_resource_params,
     }
   }
   elsif $fencing_type =~ /(?i-mx:^fence_xvm$)/ {

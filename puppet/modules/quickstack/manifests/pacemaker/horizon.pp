@@ -34,7 +34,7 @@ class quickstack::pacemaker::horizon (
 
     Exec['i-am-horizon-vip-OR-horizon-is-up-on-vip'] -> Service['httpd']
     if (str2bool_i(map_params('include_mysql'))) {
-      Exec['galera-online'] -> Exec['i-am-horizon-vip-OR-horizon-is-up-on-vip']
+      Anchor['galera-online'] -> Exec['i-am-horizon-vip-OR-horizon-is-up-on-vip']
     }
     if (str2bool_i(map_params('include_keystone'))) {
       Exec['all-keystone-nodes-are-up'] -> Exec['i-am-horizon-vip-OR-horizon-is-up-on-vip']
@@ -119,10 +119,11 @@ class quickstack::pacemaker::horizon (
       command   => "/tmp/ha-all-in-one-util.bash all_members_include horizon",
     }
     ->
-    quickstack::pacemaker::resource::service {"$::horizon::params::http_service":
-      clone => true,
-      options => 'start-delay=10s',
-      monitor_params => {'start-delay' => '20s'},
+    quickstack::pacemaker::resource::generic {"horizon":
+      resource_name         => "$::horizon::params::http_service",
+      resource_params       => 'clone interleave=true',
+      #      monitor_params => {'start-delay'     => '20s'},
+      operation_opts  => "monitor start-delay=10s",
     }
   }
 }

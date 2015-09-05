@@ -5,6 +5,8 @@ class quickstack::cinder_volume(
   $backend_glusterfs_name = 'glusterfs',
   $backend_iscsi          = false,
   $backend_iscsi_name     = 'iscsi',
+  $backend_netapp         = false,
+  $backend_netapp_name    = ['netapp'],
   $backend_nfs            = false,
   $backend_nfs_name       = 'nfs',
   $backend_rbd            = false,
@@ -23,12 +25,28 @@ class quickstack::cinder_volume(
   $san_ip                 = [''],
   $san_login              = ['grpadmin'],
   $san_password           = [''],
-  $san_thin_provision     = [false],
+  $san_thin_provision     = [true],
   $eqlx_group_name        = ['group-0'],
   $eqlx_pool              = ['default'],
   $eqlx_use_chap          = [false],
   $eqlx_chap_login        = ['chapadmin'],
   $eqlx_chap_password     = [''],
+
+  $netapp_hostname          = [''],
+  $netapp_login             = [''],
+  $netapp_password          = [''],
+  $netapp_server_port       = ['80'],
+  $netapp_storage_family    = ['ontap_cluster'],
+  $netapp_transport_type    = ['http'],
+  $netapp_storage_protocol  = ['nfs'],
+  $netapp_nfs_shares        = [''],
+  $netapp_nfs_shares_config = ['/etc/cinder/shares.conf'],
+  $netapp_volume_list       = [''],
+  $netapp_vfiler            = [''],
+  $netapp_vserver           = [''],
+  $netapp_controller_ips    = [''],
+  $netapp_sa_password       = [''],
+  $netapp_storage_pools     = [''],
 
   $rbd_pool               = 'volumes',
   $rbd_ceph_conf          = '/etc/ceph/ceph.conf',
@@ -103,6 +121,39 @@ class quickstack::cinder_volume(
         eqlx_use_chap      => $eqlx_use_chap[0],
         eqlx_chap_login    => $eqlx_chap_login[0],
         eqlx_chap_password => $eqlx_chap_password[0],
+      }
+    } elsif str2bool_i("$backend_netapp") {
+
+      # If NetApp nfs_shares parameter is empty ([]), set to undef.
+      # Otherwise, it will be interpreted as a real value and interfere with
+      # a non-NFS deployment
+      if ($netapp_nfs_shares[0] == [] or
+          $netapp_nfs_shares[0] == [''] ){
+        $_netapp_nfs_shares_sanitized = undef
+      }
+      elsif is_string($netapp_nfs_shares[0]) {
+        $_netapp_nfs_shares_sanitized = split($netapp_nfs_shares[0], ',')
+      }
+      else {
+        $_netapp_nfs_shares_sanitized = $netapp_nfs_shares[0]
+      }
+
+      class { '::cinder::volume::netapp':
+        netapp_server_hostname   => $netapp_hostname[0],
+        netapp_login             => $netapp_login[0],
+        netapp_password          => $netapp_password[0],
+        netapp_server_port       => $netapp_server_port[0],
+        netapp_storage_family    => $netapp_storage_family[0],
+        netapp_transport_type    => $netapp_transport_type[0],
+        netapp_storage_protocol  => $netapp_storage_protocol[0],
+        nfs_shares               => $_netapp_nfs_shares_sanitized,
+        nfs_shares_config        => $netapp_nfs_shares_config[0],
+        netapp_volume_list       => $netapp_volume_list[0],
+        netapp_vfiler            => $netapp_vfiler[0],
+        netapp_vserver           => $netapp_vserver[0],
+        netapp_controller_ips    => $netapp_controller_ips[0],
+        netapp_sa_password       => $netapp_sa_password[0],
+        netapp_storage_pools     => $netapp_storage_pools[0],
       }
     } elsif str2bool_i("$backend_rbd") {
       Class['quickstack::ceph::client_packages'] -> Cinder::Backend::Rbd<| |>
@@ -195,6 +246,33 @@ class quickstack::cinder_volume(
       }
     }
 
+    if str2bool_i("$backend_netapp") {
+
+      $count = size($backend_netapp_name)
+      $last = $count - 1
+
+      # FIXME: with newer parser we should use `each` (with index) instead
+      quickstack::netapp::volume { $last:
+        index => $last,
+        backend_netapp_name_array      => $backend_netapp_name,
+        netapp_hostname_array          => $netapp_hostname,
+        netapp_login_array             => $netapp_login,
+        netapp_password_array          => $netapp_password,
+        netapp_server_port_array       => $netapp_server_port,
+        netapp_storage_family_array    => $netapp_storage_family,
+        netapp_transport_type_array    => $netapp_transport_type,
+        netapp_storage_protocol_array  => $netapp_storage_protocol,
+        netapp_nfs_shares_array        => $netapp_nfs_shares,
+        netapp_nfs_shares_config_array => $netapp_nfs_shares_config,
+        netapp_volume_list_array       => $netapp_volume_list,
+        netapp_vfiler_array            => $netapp_vfiler,
+        netapp_vserver_array           => $netapp_vserver,
+        netapp_controller_ips_array    => $netapp_controller_ips,
+        netapp_sa_password_array       => $netapp_sa_password,
+        netapp_storage_pools_array     => $netapp_storage_pools,
+      }
+    }
+
     if str2bool_i("$backend_rbd") {
       $rbd_backends = ["rbd"]
       Class['quickstack::ceph::client_packages'] -> Cinder::Backend::Rbd<| |>
@@ -226,6 +304,7 @@ class quickstack::cinder_volume(
       'glusterfs_backends',
       'nfs_backends',
       'eqlx_backends',
+      'backend_netapp_name',
       'rbd_backends',
       'iscsi_backends')
     if $enabled_backends == [] {
