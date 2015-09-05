@@ -7,6 +7,8 @@ class quickstack::pacemaker::neutron (
   $enabled                    = true,
   $external_network_bridge    = '',
   $enable_vif_type_n1kv       = false,
+  $haproxy_timeout            = ['client 30s', 'server 30s',
+                                'http-request 30s'],
   $l3_ha                      = true,
   $ml2_type_drivers           = ['local', 'flat', 'vlan', 'gre', 'vxlan'],
   $ml2_tenant_network_types   = ['vxlan', 'vlan', 'gre', 'flat'],
@@ -135,10 +137,11 @@ class quickstack::pacemaker::neutron (
 
     class {"::quickstack::load_balancer::neutron":
       frontend_pub_host    => map_params("neutron_public_vip"),
-      frontend_priv_host    => map_params("neutron_private_vip"),
-      frontend_admin_host    => map_params("neutron_admin_vip"),
+      frontend_priv_host   => map_params("neutron_private_vip"),
+      frontend_admin_host  => map_params("neutron_admin_vip"),
       backend_server_names => $_backend_server_names,
       backend_server_addrs => $_backend_server_addrs,
+      timeout              => $haproxy_timeout,
     }
 
     Class['::quickstack::pacemaker::common']
@@ -233,7 +236,7 @@ class quickstack::pacemaker::neutron (
     }
     ->
     quickstack::pacemaker::resource::generic {'neutron-server':
-      clone_opts       => "interleave=true",
+      resource_params => "clone interleave=true",
       operation_opts   => "start timeout=90",
       # monitor_params => { 'start-delay'     => '10s' },
     }
@@ -244,7 +247,6 @@ class quickstack::pacemaker::neutron (
       resource_name   => 'neutron:NeutronScale',
       resource_params => "clone globally-unique=true clone-max=${_clone_max} interleave=true",
       resource_type   => 'ocf',
-      require         => Quickstack::Pacemaker::Resource::Generic['neutron-server'],
     }
 
     if ($core_plugin == "neutron.plugins.plumgrid.plumgrid_plugin.plumgrid_plugin.NeutronPluginPLUMgridV2") {
@@ -255,139 +257,139 @@ class quickstack::pacemaker::neutron (
       Anchor['pacemaker ordering constraints begin']
 
     } else {
-      notify { 'neutron-scale resource ':
+     notify { 'neutron-scale resource ':
         require => Quickstack::Pacemaker::Resource::Generic['neutron-scale'],
-      }
-      ->
-      quickstack::pacemaker::resource::generic {'neutron-ovs-cleanup':
-        resource_name   => 'neutron:OVSCleanup',
-        resource_params => "clone interleave=true",
-        resource_type   => 'ocf',
-      }
-      ->
-      quickstack::pacemaker::resource::generic {'neutron-netns-cleanup':
-        resource_name   => 'neutron:NetnsCleanup',
-        resource_params => "clone interleave=true",
-        resource_type   => 'ocf',
-      }
-      ->
-      quickstack::pacemaker::resource::generic {'neutron-openvswitch-agent':
-        clone_opts    => "interleave=true",
-        #      monitor_params => { 'start-delay' => '10s' },
-      }
-      ->
-      quickstack::pacemaker::resource::generic {'neutron-dhcp-agent':
-        clone_opts    => "interleave=true",
-        # monitor_params => { 'start-delay' => '10s' },
-      }
-      ->
-      quickstack::pacemaker::resource::generic {'neutron-l3-agent':
-        clone_opts    => "interleave=true",
-        # monitor_params => { 'start-delay' => '10s' },
-      }
-      ->
-      quickstack::pacemaker::resource::generic {'neutron-metadata-agent':
-        clone_opts    => "interleave=true",
-        #monitor_params => { 'start-delay' => '10s' },
-      }
-      ->
-      quickstack::pacemaker::constraint::base {
-        'neutron-scale-to-ovs-cleanup-constr' :
+     }
+    ->
+    quickstack::pacemaker::resource::generic {'neutron-ovs-cleanup':
+      resource_name   => 'neutron:OVSCleanup',
+      resource_params => "clone interleave=true",
+      resource_type   => 'ocf',
+    }
+    ->
+    quickstack::pacemaker::resource::generic {'neutron-netns-cleanup':
+      resource_name   => 'neutron:NetnsCleanup',
+      resource_params => "clone interleave=true",
+      resource_type   => 'ocf',
+    }
+    ->
+    quickstack::pacemaker::resource::generic {'neutron-openvswitch-agent':
+      resource_params => "clone interleave=true",
+      #      monitor_params => { 'start-delay' => '10s' },
+    }
+    ->
+    quickstack::pacemaker::resource::generic {'neutron-dhcp-agent':
+      resource_params => "clone interleave=true",
+      # monitor_params => { 'start-delay' => '10s' },
+    }
+    ->
+    quickstack::pacemaker::resource::generic {'neutron-l3-agent':
+      resource_params => "clone interleave=true",
+      # monitor_params => { 'start-delay' => '10s' },
+    }
+    ->
+    quickstack::pacemaker::resource::generic {'neutron-metadata-agent':
+      resource_params => "clone interleave=true",
+      #monitor_params => { 'start-delay' => '10s' },
+    }
+    ->
+    quickstack::pacemaker::constraint::base {
+      'neutron-scale-to-ovs-cleanup-constr' :
+      constraint_type => "order",
+      first_resource  => "neutron-scale-clone",
+      second_resource => "neutron-ovs-cleanup-clone",
+      first_action    => "start",
+      second_action   => "start",
+    }
+    ->
+    quickstack::pacemaker::constraint::colocation {
+      'neutron-scale-ovs-colo' :
+      source => "neutron-ovs-cleanup-clone",
+      target => "neutron-scale-clone",
+      score  => "INFINITY",
+    }
+    ->
+    quickstack::pacemaker::constraint::base {
+      'neutron-ovs-to-netns-cleanup-constr' :
+      constraint_type => "order",
+      first_resource  => "neutron-ovs-cleanup-clone",
+      second_resource => "neutron-netns-cleanup-clone",
+      first_action    => "start",
+      second_action   => "start",
+    }
+    ->
+    quickstack::pacemaker::constraint::colocation {
+      'neutron-ovs-netns-colo' :
+      source => "neutron-netns-cleanup-clone",
+      target => "neutron-ovs-cleanup-clone",
+      score  => "INFINITY",
+    }
+    ->
+    quickstack::pacemaker::constraint::base {
+      'neutron-netns-to-openvswitch-constr' :
         constraint_type => "order",
-        first_resource  => "neutron-scale-clone",
-        second_resource => "neutron-ovs-cleanup-clone",
+        first_resource  => "neutron-netns-cleanup-clone",
+        second_resource => "neutron-openvswitch-agent-clone",
         first_action    => "start",
         second_action   => "start",
-      }
-      ->
-      quickstack::pacemaker::constraint::colocation {
-        'neutron-scale-ovs-colo' :
-        source => "neutron-ovs-cleanup-clone",
-        target => "neutron-scale-clone",
+    }
+    ->
+    quickstack::pacemaker::constraint::colocation {
+      'neutron-netns-openvswitch-colo' :
+        source => "neutron-openvswitch-agent-clone",
+        target => "neutron-netns-cleanup-clone",
         score  => "INFINITY",
-      }
-      ->
-      quickstack::pacemaker::constraint::base {
-        'neutron-ovs-to-netns-cleanup-constr' :
-        constraint_type => "order",
-        first_resource  => "neutron-ovs-cleanup-clone",
-        second_resource => "neutron-netns-cleanup-clone",
-        first_action    => "start",
-        second_action   => "start",
-      }
-      ->
-      quickstack::pacemaker::constraint::colocation {
-        'neutron-ovs-netns-colo' :
-        source => "neutron-netns-cleanup-clone",
-        target => "neutron-ovs-cleanup-clone",
-        score  => "INFINITY",
-      }
-      ->
-      quickstack::pacemaker::constraint::base {
-        'neutron-netns-to-openvswitch-constr' :
-          constraint_type => "order",
-          first_resource  => "neutron-netns-cleanup-clone",
-          second_resource => "neutron-openvswitch-agent-clone",
-          first_action    => "start",
-          second_action   => "start",
-      }
-      ->
-      quickstack::pacemaker::constraint::colocation {
-        'neutron-netns-openvswitch-colo' :
-          source => "neutron-openvswitch-agent-clone",
-          target => "neutron-netns-cleanup-clone",
-          score  => "INFINITY",
-      }
-      ->
-      quickstack::pacemaker::constraint::base {
-        'neutron-openvswitch-dhcp-constr' :
-        constraint_type => "order",
-        first_resource  => "neutron-openvswitch-agent-clone",
-        second_resource => "neutron-dhcp-agent-clone",
-        first_action    => "start",
-        second_action   => "start",
-      }
-      ->
-      quickstack::pacemaker::constraint::colocation {
-        'neutron-openvswitch-dhcp-colo' :
-        source => "neutron-dhcp-agent-clone",
-        target => "neutron-openvswitch-agent-clone",
-        score  => "INFINITY",
-      }
-      ->
-      quickstack::pacemaker::constraint::base {
-        'neutron-dhcp-l3-constr' :
-        constraint_type => "order",
-        first_resource  => "neutron-dhcp-agent-clone",
-        second_resource => "neutron-l3-agent-clone",
-        first_action    => "start",
-        second_action   => "start",
-      }
-      ->
-      quickstack::pacemaker::constraint::colocation {
-        'neutron-dhcp-l3-colo' :
-        source => "neutron-l3-agent-clone",
-        target => "neutron-dhcp-agent-clone",
-        score  => "INFINITY",
-      }
-      ->
-      quickstack::pacemaker::constraint::base {
-        'neutron-l3-metadata-constr' :
-        constraint_type => "order",
-        first_resource  => "neutron-l3-agent-clone",
-        second_resource => "neutron-metadata-agent-clone",
-        first_action    => "start",
-        second_action   => "start",
-      }
-      ->
-      quickstack::pacemaker::constraint::colocation {
-        'neutron-l3-metadata-colo' :
-        source => "neutron-metadata-agent-clone",
-        target => "neutron-l3-agent-clone",
-        score  => "INFINITY",
-      }
-      ->
-      Anchor['pacemaker ordering constraints begin']
+    }
+    ->
+    quickstack::pacemaker::constraint::base {
+      'neutron-openvswitch-dhcp-constr' :
+      constraint_type => "order",
+      first_resource  => "neutron-openvswitch-agent-clone",
+      second_resource => "neutron-dhcp-agent-clone",
+      first_action    => "start",
+      second_action   => "start",
+    }
+    ->
+    quickstack::pacemaker::constraint::colocation {
+      'neutron-openvswitch-dhcp-colo' :
+      source => "neutron-dhcp-agent-clone",
+      target => "neutron-openvswitch-agent-clone",
+      score  => "INFINITY",
+    }
+    ->
+    quickstack::pacemaker::constraint::base {
+      'neutron-dhcp-l3-constr' :
+      constraint_type => "order",
+      first_resource  => "neutron-dhcp-agent-clone",
+      second_resource => "neutron-l3-agent-clone",
+      first_action    => "start",
+      second_action   => "start",
+    }
+    ->
+    quickstack::pacemaker::constraint::colocation {
+      'neutron-dhcp-l3-colo' :
+      source => "neutron-l3-agent-clone",
+      target => "neutron-dhcp-agent-clone",
+      score  => "INFINITY",
+    }
+    ->
+    quickstack::pacemaker::constraint::base {
+      'neutron-l3-metadata-constr' :
+      constraint_type => "order",
+      first_resource  => "neutron-l3-agent-clone",
+      second_resource => "neutron-metadata-agent-clone",
+      first_action    => "start",
+      second_action   => "start",
+    }
+    ->
+    quickstack::pacemaker::constraint::colocation {
+      'neutron-l3-metadata-colo' :
+      source => "neutron-metadata-agent-clone",
+      target => "neutron-l3-agent-clone",
+      score  => "INFINITY",
+    }
+    ->
+    Anchor['pacemaker ordering constraints begin']
     }
   }
 }

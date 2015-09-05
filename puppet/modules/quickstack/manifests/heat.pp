@@ -17,6 +17,8 @@ class quickstack::heat(
   $amqp_username           = '',
   $amqp_password           = '',
   $amqp_provider           = 'rabbitmq',
+  $rabbit_use_ssl          = false,
+  $rabbit_hosts            = undef,
 
   $cfn_host                = '127.0.0.1',
   $cloudwatch_host         = '127.0.0.1',
@@ -29,6 +31,7 @@ class quickstack::heat(
   $heat_cfn_enabled        = true,
   $heat_cloudwatch_enabled = true,
   $heat_engine_enabled     = true,
+  $engine_cfg_delegated    = true,
   $debug                   = false,
   $verbose                 = false,
 ) {
@@ -68,12 +71,19 @@ class quickstack::heat(
     rabbit_port       => $amqp_port,
     rabbit_userid     => $amqp_username,
     rabbit_password   => $amqp_password,
+    rabbit_use_ssl    => $rabbit_use_ssl,
+    rabbit_hosts      => $rabbit_hosts,
     use_syslog        => str2bool_i("$use_syslog"),
     log_facility      => $log_facility,
     verbose           => $verbose,
     debug             => $debug,
   }
-  contain heat
+  # FIXME(jistr): after we drop support for Puppet <= 3.6, we can use
+  # `contain ::heat` instead of the anchors here, and use fully qualified
+  # class names in the rest of `contain` statements too
+  anchor { 'quickstack-heat-first': } ->
+  Class['::heat'] ->
+  anchor { 'quickstack-heat-last': }
 
   class { '::heat::api':
     bind_host      => $bind_host,
@@ -106,6 +116,6 @@ class quickstack::heat(
     heat_watch_server_url         => "http://${cloudwatch_host}:8003",
     enabled                       => str2bool_i("$heat_engine_enabled"),
     manage_service                => str2bool_i("$manage_service"),
+    configure_delegated_roles     => $engine_cfg_delegated,
   }
-  contain heat::engine
 }

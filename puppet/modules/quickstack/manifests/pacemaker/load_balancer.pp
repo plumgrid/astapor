@@ -23,7 +23,8 @@ class quickstack::pacemaker::load_balancer {
     command   => "/tmp/ha-all-in-one-util.bash all_members_include haproxy",
 
   } ->
-  quickstack::pacemaker::resource::service {'haproxy':
-    clone => true,
-  }
+  quickstack::pacemaker::resource::generic {'haproxy':
+    resource_params => "clone interleave=true",
+  } ->
+  Anchor['pacemaker ordering constraints begin']
 }

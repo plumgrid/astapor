@@ -9,6 +9,8 @@ class quickstack::pacemaker::cinder(
   $backend_glusterfs_name = 'glusterfs',
   $backend_iscsi          = false,
   $backend_iscsi_name     = 'iscsi',
+  $backend_netapp         = false,
+  $backend_netapp_name    = ['netapp'],
   $backend_nfs            = false,
   $backend_nfs_name       = 'nfs',
   $backend_rbd            = false,
@@ -25,12 +27,28 @@ class quickstack::pacemaker::cinder(
   $san_ip                 = [''],
   $san_login              = ['grpadmin'],
   $san_password           = [''],
-  $san_thin_provision     = [false],
+  $san_thin_provision     = [true],
   $eqlx_group_name        = ['group-0'],
   $eqlx_pool              = ['default'],
   $eqlx_use_chap          = [false],
   $eqlx_chap_login        = ['chapadmin'],
   $eqlx_chap_password     = [''],
+
+  $netapp_hostname          = [''],
+  $netapp_login             = [''],
+  $netapp_password          = [''],
+  $netapp_server_port       = ['80'],
+  $netapp_storage_family    = ['ontap_cluster'],
+  $netapp_transport_type    = ['http'],
+  $netapp_storage_protocol  = ['nfs'],
+  $netapp_nfs_shares        = [''],
+  $netapp_nfs_shares_config = ['/etc/cinder/shares.conf'],
+  $netapp_volume_list       = [''],
+  $netapp_vfiler            = [''],
+  $netapp_vserver           = [''],
+  $netapp_controller_ips    = [''],
+  $netapp_sa_password       = [''],
+  $netapp_storage_pools     = [''],
 
   $rbd_pool               = 'volumes',
   $rbd_ceph_conf          = '/etc/ceph/ceph.conf',
@@ -77,9 +95,9 @@ class quickstack::pacemaker::cinder(
       $_enabled = false
     }
 
-    Exec['i-am-cinder-vip-OR-cinder-is-up-on-vip'] ~> Exec<| title =='cinder-manage db_sync'|> -> Exec['pcs-cinder-server-set-up']
+    Exec['i-am-cinder-vip-OR-cinder-is-up-on-vip'] -> Exec<| title =='cinder-manage db_sync'|> -> Exec['pcs-cinder-server-set-up']
     if (str2bool_i(map_params('include_mysql'))) {
-      Exec['galera-online'] -> Exec['i-am-cinder-vip-OR-cinder-is-up-on-vip']
+      Anchor['galera-online'] -> Exec['i-am-cinder-vip-OR-cinder-is-up-on-vip']
     }
     if (str2bool_i(map_params('include_keystone'))) {
       Exec['all-keystone-nodes-are-up'] -> Exec['i-am-cinder-vip-OR-cinder-is-up-on-vip']
@@ -92,6 +110,23 @@ class quickstack::pacemaker::cinder(
     }
     if (str2bool_i(map_params('include_nova'))) {
       Exec['all-nova-nodes-are-up'] -> Exec['i-am-cinder-vip-OR-cinder-is-up-on-vip']
+    }
+
+    if (str2bool_i("$backend_nfs")) {
+      $_volume_clone_opts = undef
+      $_cinder_volume_resource_name = "cinder-volume"
+      # TODO: once cinder can work A/A, use the following values instead
+      # $_volume_clone_opts = "interleave=true"
+      # $_cinder_volume_resource_name = "cinder-volume-clone"
+    } else {
+      #$_volume_clone_opts = undef
+      $_volume_resource_params = undef
+      $_cinder_volume_resource_name = "cinder-volume"
+    }
+
+    if (str2bool_i("$backend_netapp")) {
+      $_netapp_backend_count = size($netapp_hostname)
+      $_backend_netapp_name = produce_array_with_prefix("netapp", 1, $_netapp_backend_count)
     }
 
     class {"::quickstack::load_balancer::cinder":
@@ -140,6 +175,7 @@ class quickstack::pacemaker::cinder(
       amqp_username  => map_params('amqp_username'),
       amqp_password  => map_params('amqp_password'),
       qpid_heartbeat => $qpid_heartbeat,
+      rabbit_hosts   => map_params("rabbitmq_hosts"),
       use_syslog     => $use_syslog,
       log_facility   => $log_facility,
       debug          => $debug,
@@ -161,26 +197,27 @@ class quickstack::pacemaker::cinder(
       try_sleep => 10,
       command   => "/tmp/ha-all-in-one-util.bash all_members_include cinder",
     } ->
-    quickstack::pacemaker::resource::service {'openstack-cinder-api':
-      clone => true,
-      options => 'start-delay=10s',
+    quickstack::pacemaker::resource::generic {'cinder-api':
+      resource_name => "openstack-cinder-api",
+      resource_params => "clone interleave=true",
     } ->
-    quickstack::pacemaker::resource::service {'openstack-cinder-scheduler':
-      clone => true,
-      options => 'start-delay=10s',
+    quickstack::pacemaker::resource::generic {'cinder-scheduler':
+      resource_name => "openstack-cinder-scheduler",
+      resource_params => "clone interleave=true",
     } ->
     quickstack::pacemaker::constraint::base { 'cinder-api-scheduler-constr' :
       constraint_type => "order",
-      first_resource  => "openstack-cinder-api-clone",
-      second_resource => "openstack-cinder-scheduler-clone",
+      first_resource  => "cinder-api-clone",
+      second_resource => "cinder-scheduler-clone",
       first_action    => "start",
       second_action   => "start",
     } ->
     quickstack::pacemaker::constraint::colocation { 'cinder-api-scheduler-colo' :
-      source => "openstack-cinder-scheduler-clone",
-      target => "openstack-cinder-api-clone",
+      source => "cinder-scheduler-clone",
+      target => "cinder-api-clone",
       score => "INFINITY",
-    }
+    } ->
+    Anchor['pacemaker ordering constraints begin']
 
     if str2bool_i("$volume") {
       # FIXME(jistr): remove the host override
@@ -196,6 +233,8 @@ class quickstack::pacemaker::cinder(
         backend_glusterfs_name => $backend_glusterfs_name,
         backend_iscsi          => $backend_iscsi,
         backend_iscsi_name     => $backend_iscsi_name,
+        backend_netapp         => $backend_netapp,
+        backend_netapp_name    => $_backend_netapp_name,
         backend_nfs            => $backend_nfs,
         backend_nfs_name       => $backend_nfs_name,
         backend_eqlx           => $backend_eqlx,
@@ -205,6 +244,21 @@ class quickstack::pacemaker::cinder(
         multiple_backends      => $multiple_backends,
         iscsi_bind_addr        => map_params('local_bind_addr'),
         glusterfs_shares       => $glusterfs_shares,
+        netapp_hostname           => $netapp_hostname,
+        netapp_login              => $netapp_login,
+        netapp_password           => $netapp_password,
+        netapp_server_port        => $netapp_server_port,
+        netapp_storage_family     => $netapp_storage_family,
+        netapp_transport_type     => $netapp_transport_type,
+        netapp_storage_protocol   => $netapp_storage_protocol,
+        netapp_nfs_shares         => $netapp_nfs_shares,
+        netapp_nfs_shares_config  => $netapp_nfs_shares_config,
+        netapp_volume_list        => $netapp_volume_list,
+        netapp_vfiler             => $netapp_vfiler,
+        netapp_vserver            => $netapp_vserver,
+        netapp_controller_ips     => $netapp_controller_ips,
+        netapp_sa_password        => $netapp_sa_password,
+        netapp_storage_pools      => $netapp_storage_pools,
         nfs_shares             => $nfs_shares,
         nfs_mount_options      => $nfs_mount_options,
         san_ip                 => $san_ip,
@@ -219,35 +273,40 @@ class quickstack::pacemaker::cinder(
         rbd_pool               => $rbd_pool,
         rbd_ceph_conf          => $rbd_ceph_conf,
         rbd_flatten_volume_from_snapshot
-                               => $rbd_flatten_volume_from_snapshot,
-        rbd_max_clone_depth    => $rbd_max_clone_depth,
-        rbd_user               => $rbd_user,
-        rbd_secret_uuid        => $rbd_secret_uuid,
-        enabled                => $_enabled,
-        manage_service         => $_enabled,
+                                => $rbd_flatten_volume_from_snapshot,
+        rbd_max_clone_depth     => $rbd_max_clone_depth,
+        rbd_user                => $rbd_user,
+        rbd_secret_uuid         => $rbd_secret_uuid,
+        enabled                 => $_enabled,
+        manage_service          => $_enabled,
       }
       ->
       Exec['pcs-cinder-server-set-up']
 
       Exec['all-cinder-nodes-are-up']
       ->
-      quickstack::pacemaker::resource::service {'openstack-cinder-volume':
-        # FIXME(jistr): set 'clone => true'
+      Quickstack::Pacemaker::Resource::Generic['cinder-scheduler']
+      ->
+      quickstack::pacemaker::resource::generic {'cinder-volume':
+        # FIXME(jayg): clone only if backend is nfs
         # https://bugs.launchpad.net/cinder/+bug/1322190
-        options => 'start-delay=10s',
+        resource_name   => "openstack-cinder-volume",
+        #resource_params => 'start-delay=10s',
+        resource_params => '$_volume_resource_params',
+        operation_opts  => "monitor start-delay=10s",
       }
       ->
       quickstack::pacemaker::constraint::base { 'cinder-scheduler-volume-constr' :
         constraint_type => "order",
-        first_resource  => "openstack-cinder-scheduler-clone",
-        second_resource => "openstack-cinder-volume",
+        first_resource  => "cinder-scheduler-clone",
+        second_resource => "$_cinder_volume_resource_name",
         first_action    => "start",
         second_action   => "start",
       }
       ->
       quickstack::pacemaker::constraint::colocation { 'cinder-scheduler-volume-colo' :
-        source => "openstack-cinder-volume",
-        target => "openstack-cinder-scheduler-clone",
+        source => "$_cinder_volume_resource_name",
+        target => "cinder-scheduler-clone",
         score => "INFINITY",
       }
     }
@@ -260,6 +319,8 @@ class quickstack::pacemaker::cinder(
         backend_glusterfs_name => $backend_glusterfs_name,
         backend_iscsi          => $backend_iscsi,
         backend_iscsi_name     => $backend_iscsi_name,
+        backend_netapp         => $backend_netapp,
+        backend_netapp_name    => $_backend_netapp_name,
         backend_nfs            => $backend_nfs,
         backend_nfs_name       => $backend_nfs_name,
         backend_eqlx           => $backend_eqlx,
@@ -300,5 +361,6 @@ class quickstack::pacemaker::cinder(
       Class['quickstack::ceph::client_packages'] ->
       Exec['i-am-cinder-vip-OR-cinder-is-up-on-vip']
     }
+
   }
 }
