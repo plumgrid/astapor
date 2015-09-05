@@ -39,6 +39,8 @@ class quickstack::glance (
   $amqp_username            = '',
   $amqp_password            = '',
   $amqp_provider            = 'rabbitmq',
+  $rabbit_use_ssl           = false,
+  $rabbit_hosts             = undef,
 ) {
 
   # Configure the db string
@@ -48,9 +50,25 @@ class quickstack::glance (
     $sql_connection = "mysql://${db_user}:${db_password}@${db_host}/${db_name}"
   }
 
+  $_auth_url = "http://${keystone_host}:5000/v2.0"
+
+  if ($backend == 'file') {
+    $_backend = 'filesystem'
+  } else {
+    $_backend = $backend
+  }
+
+  $_stores  = [ "glance.store.${_backend}.Store",
+                "glance.store.http.Store"]
+
   $show_image_direct_url = $backend ? {
     'rbd' => true,
     default => false,
+  }
+
+  if $rabbit_hosts {
+    glance_api_config { 'DEFAULT/rabbit_host': ensure => absent }
+    glance_api_config { 'DEFAULT/rabbit_port': ensure => absent }
   }
 
   # Install and configure glance-api
@@ -62,9 +80,11 @@ class quickstack::glance (
     auth_type             => 'keystone',
     auth_port             => '35357',
     auth_host             => $keystone_host,
+    auth_url              => $_auth_url,
     keystone_tenant       => 'services',
     keystone_user         => 'glance',
     keystone_password     => $user_password,
+    known_stores          => $_stores,
     sql_connection        => $sql_connection,
     sql_idle_timeout      => $sql_idle_timeout,
     use_syslog            => $use_syslog,
@@ -117,6 +137,8 @@ class quickstack::glance (
       rabbit_userid   => $amqp_username,
       rabbit_host     => $amqp_host,
       rabbit_port     => $amqp_port,
+      rabbit_use_ssl  => $rabbit_use_ssl,
+      rabbit_hosts    => $rabbit_hosts,
     }
   }
 

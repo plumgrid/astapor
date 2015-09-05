@@ -1,0 +1,8 @@
+---
+:hierarchy:
+- "%{::fqdn}"
+- custom
+- secrets
+- "%{::osfamily}"
+- classes
+- defaults

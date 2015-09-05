@@ -34,7 +34,7 @@ class quickstack::pacemaker::nova (
     }
     Exec['i-am-nova-vip-OR-nova-is-up-on-vip'] -> Exec['nova-db-sync']
     if (str2bool_i(map_params('include_mysql'))) {
-      Exec['galera-online'] -> Exec['i-am-nova-vip-OR-nova-is-up-on-vip']
+      Anchor['galera-online'] -> Exec['i-am-nova-vip-OR-nova-is-up-on-vip']
     }
     if (str2bool_i(map_params('include_keystone'))) {
       Exec['all-keystone-nodes-are-up'] -> Exec['i-am-nova-vip-OR-nova-is-up-on-vip']
@@ -47,10 +47,12 @@ class quickstack::pacemaker::nova (
     }
 
     if ($scheduler_host_subset_size == '1') {
-      $sched_clone = false
+      #$sched_clone = ""
+      $sched_resource_params = ""
       $_nova_scheduler_resource = "openstack-nova-scheduler"
     } else {
-      $sched_clone = true
+      #$sched_clone = "interleave=true"
+      $sched_resource_params = "clone interleave=true"
       $_nova_scheduler_resource = "openstack-nova-scheduler-clone"
     }
 
@@ -104,6 +106,7 @@ class quickstack::pacemaker::nova (
       amqp_port                     => map_params("amqp_port"),
       amqp_username                 => map_params("amqp_username"),
       amqp_password                 => map_params("amqp_password"),
+      rabbit_hosts                  => map_params("rabbitmq_hosts"),
       rpc_backend                   => amqp_backend('nova', map_params('amqp_provider')),
       scheduler_host_subset_size    => $scheduler_host_subset_size,
       verbose                       => $verbose,
@@ -122,17 +125,17 @@ class quickstack::pacemaker::nova (
       command   => "/tmp/ha-all-in-one-util.bash all_members_include nova",
     }
     ->
-    quickstack::pacemaker::resource::service {['openstack-nova-consoleauth',
+    quickstack::pacemaker::resource::generic {['openstack-nova-consoleauth',
                               'openstack-nova-novncproxy',
                               'openstack-nova-api',
                               'openstack-nova-conductor' ]:
-      clone   => true,
-      options => 'start-delay=10s',
+      resource_params => 'clone interleave=true',
+      operation_opts  => "monitor start-delay=10s",
     }
     ->
-    quickstack::pacemaker::resource::service {'openstack-nova-scheduler':
-      clone   => $sched_clone,
-      options => 'start-delay=10s',
+    quickstack::pacemaker::resource::generic {'openstack-nova-scheduler':
+      resource_params => $sched_resource_params,
+      operation_opts  => "monitor start-delay=10s",
     }
     ->
     quickstack::pacemaker::constraint::base { 'nova-console-vnc-constr' :
@@ -190,5 +193,7 @@ class quickstack::pacemaker::nova (
       target => "openstack-nova-conductor-clone",
       score => "INFINITY",
     }
+    ->
+    Anchor['pacemaker ordering constraints begin']
   }
 }

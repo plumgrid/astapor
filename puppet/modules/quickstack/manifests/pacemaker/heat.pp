@@ -50,8 +50,10 @@ class quickstack::pacemaker::heat(
 
     Exec['i-am-heat-vip-OR-heat-is-up-on-vip'] -> Exec<| title == 'heat-dbsync' |>
     -> Exec['pcs-heat-server-set-up']
+    Exec['i-am-heat-vip-OR-heat-is-up-on-vip'] -> Service<| title =='heat-engine' |>
+
     if (str2bool_i(map_params('include_mysql'))) {
-      Exec['galera-online'] -> Exec['i-am-heat-vip-OR-heat-is-up-on-vip']
+      Anchor['galera-online'] -> Exec['i-am-heat-vip-OR-heat-is-up-on-vip']
     }
     if (str2bool_i(map_params('include_keystone'))) {
       Exec['all-keystone-nodes-are-up'] -> Exec['i-am-heat-vip-OR-heat-is-up-on-vip']
@@ -107,6 +109,7 @@ class quickstack::pacemaker::heat(
       amqp_username           => map_params("amqp_username"),
       amqp_password           => map_params("amqp_password"),
       amqp_provider           => map_params("amqp_provider"),
+      rabbit_hosts            => map_params("rabbitmq_hosts"),
       cfn_host                => map_params("heat_cfn_admin_vip"),
       cloudwatch_host         => map_params("heat_admin_vip"),
       use_syslog              => $use_syslog,
@@ -118,6 +121,7 @@ class quickstack::pacemaker::heat(
       heat_cfn_enabled        => $_enabled,
       heat_cloudwatch_enabled => $_enabled,
       heat_engine_enabled     => false,
+      engine_cfg_delegated    => has_interface_with("ipaddress", map_params("cluster_control_ip")),
     }
     ->
     exec {"pcs-heat-server-set-up":
@@ -135,15 +139,16 @@ class quickstack::pacemaker::heat(
       command   => "/tmp/ha-all-in-one-util.bash all_members_include heat",
     }
     ->
-    quickstack::pacemaker::resource::service {'openstack-heat-api':
-      clone => true,
-      options => 'start-delay=10s',
+    quickstack::pacemaker::resource::generic {'heat-api':
+      resource_name   => "openstack-heat-api",
+      resource_params => "clone interleave=true",
+      operation_opts  => "monitor start-delay=10s",
     }
     ->
     quickstack::pacemaker::resource::service {'openstack-heat-engine':
       group => "$heat_group",
       clone => false,
-      options => 'start-delay=10s',
+      monitor_params => { 'start-delay' => '10s' },
       interval => '60s',
     }
 
@@ -160,22 +165,23 @@ class quickstack::pacemaker::heat(
       Service[openstack-heat-api-cfn] ->
       Quickstack::Pacemaker::Resource::Service['openstack-heat-engine']
       ->
-      quickstack::pacemaker::resource::service {"openstack-heat-api-cfn":
-        clone => true,
-        options => 'start-delay=10s',
+      quickstack::pacemaker::resource::generic {"heat-api-cfn":
+        resource_name   => "openstack-heat-api-cfn",
+        resource_params => "clone interleave=true",
+        operation_opts  => "monitor start-delay=10s",
       }
       ->
       quickstack::pacemaker::constraint::base { 'heat-api-cfn-constr' :
         constraint_type => "order",
-        first_resource  => "openstack-heat-api-clone",
-        second_resource => "openstack-heat-api-cfn-clone",
+        first_resource  => "heat-api-clone",
+        second_resource => "heat-api-cfn-clone",
         first_action    => "start",
         second_action   => "start",
       }
       ->
       quickstack::pacemaker::constraint::colocation { 'heat-api-cfn-colo' :
-        source => "openstack-heat-api-cfn-clone",
-        target => "openstack-heat-api-clone",
+        source => "heat-api-cfn-clone",
+        target => "heat-api-clone",
         score => "INFINITY",
       }
     }
@@ -183,30 +189,31 @@ class quickstack::pacemaker::heat(
     if str2bool_i($heat_cloudwatch_enabled) {
       Quickstack::Pacemaker::Resource::Service['openstack-heat-engine']
       ->
-      quickstack::pacemaker::resource::service {"openstack-heat-api-cloudwatch":
-        clone => true,
-        options => 'start-delay=10s',
+      quickstack::pacemaker::resource::generic {"heat-api-cloudwatch":
+        resource_name   => "openstack-heat-api-cloudwatch",
+        resource_params => "clone interleave=true",
+        operation_opts  => "monitor start-delay=10s",
       }
       if str2bool_i($heat_cfn_enabled) {
-        Quickstack::Pacemaker::Resource::Service['openstack-heat-api-cfn'] ->
-        Quickstack::Pacemaker::Resource::Service['openstack-heat-api-cloudwatch'] ->
+        Quickstack::Pacemaker::Resource::Generic['heat-api-cfn'] ->
+        Quickstack::Pacemaker::Resource::Generic['heat-api-cloudwatch'] ->
         quickstack::pacemaker::constraint::base { 'heat-cfn-cloudwatch-constr' :
           constraint_type => "order",
-          first_resource  => "openstack-heat-api-cfn-clone",
-          second_resource => "openstack-heat-api-cloudwatch-clone",
+          first_resource  => "heat-api-cfn-clone",
+          second_resource => "heat-api-cloudwatch-clone",
           first_action    => "start",
           second_action   => "start",
         }
         ->
         quickstack::pacemaker::constraint::colocation { 'heat-cfn-cloudwatch-colo' :
-          source => "openstack-heat-api-cloudwatch-clone",
-          target => "openstack-heat-api-cfn-clone",
+          source => "heat-api-cloudwatch-clone",
+          target => "heat-api-cfn-clone",
           score => "INFINITY",
         }
         ->
         quickstack::pacemaker::constraint::base { 'heat-cloudwatch-engine-constr' :
           constraint_type => "order",
-          first_resource  => "openstack-heat-api-cloudwatch-clone",
+          first_resource  => "heat-api-cloudwatch-clone",
           second_resource => "openstack-heat-engine",
           first_action    => "start",
           second_action   => "start",
@@ -214,7 +221,7 @@ class quickstack::pacemaker::heat(
         ->
         quickstack::pacemaker::constraint::colocation { 'heat-cloudwatch-engine-colo' :
           source => "openstack-heat-engine",
-          target => "openstack-heat-api-cloudwatch-clone",
+          target => "heat-api-cloudwatch-clone",
           score => "INFINITY",
         }
       }

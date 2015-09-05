@@ -1,5 +1,8 @@
-# Common quickstack configurations
+# Quickstack init
+class quickstack () inherits quickstack::params {
+  $list = scenario_classes("$scenario", $scenarii)
 
-class quickstack(){
-  require ntp
+  notify {"running $scenario":}
+  quick_include($list)
 }
+
