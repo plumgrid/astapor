@@ -169,8 +169,6 @@ class quickstack::neutron::all (
     max_l3_agents_per_router => $max_l3_agents_per_router,
     min_l3_agents_per_router => $min_l3_agents_per_router,
     sync_db                  => true,
-    api_workers              => 0,
-    rpc_workers              => 0,
     database_max_pool_size   => 30,
     database_max_overflow    => 40,
   }
@@ -299,7 +297,6 @@ class quickstack::neutron::all (
     manage_service => str2bool_i("$manage_service"),
     metadata_ip    => $neutron_priv_host,
     shared_secret  => $neutron_metadata_proxy_secret,
-    metadata_workers => 0,
   }
 
   }
